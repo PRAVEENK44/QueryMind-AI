@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QueryMind AI | Command Center</title>
+    <!-- Fonts -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Charts -->
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="canvas-bg"></div>
+    <div class="canvas-grid"></div>
+
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="brand">
+            <i class="fas fa-brain"></i>
+            <span>QueryMind AI</span>
+        </div>
+        <div class="nav-actions">
+            <button id="uploadDbBtn" style="color: var(--primary); background: var(--primary-light); border: 1px solid rgba(79,70,229,0.2); cursor: pointer; font-size: 0.9rem; margin-right: 1rem; padding: 0.5rem 1.1rem; border-radius: 99px; font-weight: 600; font-family: 'Outfit', sans-serif; transition: all 0.2s;">
+                <i class="fas fa-database" style="margin-right: 0.4rem;"></i> Upload DB
+            </button>
+            <div id="customDbBadge" class="custom-db-badge">
+                <i class="fas fa-circle" style="font-size: 0.5rem; color: var(--success);"></i>
+                <span class="db-name" id="customDbName">mydb.sqlite</span>
+                <i class="fas fa-times db-close" id="removeCustomDb"></i>
+            </div>
+            <button id="openAtlas" class="btn-ghost" style="color: var(--text-muted); background: transparent; border: none; cursor: pointer; font-size: 1rem; margin-right: 1.5rem;">
+                <i class="fas fa-project-diagram"></i> Atlas
+            </button>
+            <button id="openKnowledge" class="btn-ghost" style="color: var(--text-muted); background: transparent; border: none; cursor: pointer; font-size: 1rem; margin-right: 1.5rem;">
+                <i class="fas fa-database"></i> Knowledge
+            </button>
+            <div id="statusIndicator" style="display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">
+                <div id="statusDot" class="pulse" style="width: 10px; height: 10px; border-radius: 50%; background: var(--success);"></div>
+                <span id="statusText">Link Active</span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Entry -->
+    <main class="command-center">
+        <h1 class="hero-text">Query your business.</h1>
+        <p class="hero-sub">Deep exploration. Real-time insights. Zero friction.</p>
+        
+        <div class="search-box">
+            <input type="text" id="queryInput" placeholder="Ask anything about your data..." autocomplete="off">
+            <button class="search-btn" id="submitQuery">
+                <span>Synchronize</span>
+                <i class="fas fa-arrow-right"></i>
+            </button>
+        </div>
+
+        <div id="sampleQueries" style="margin-top: 2.5rem; display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+            <!-- Loaded dynamically -->
+        </div>
+
+        <div style="margin-top: 3rem;">
+            <button id="loadDashboardBtn" style="background: rgba(255,255,255,0.4); backdrop-filter: blur(10px); border: 1px solid var(--glass-border); color: var(--text-muted); padding: 0.75rem 1.5rem; border-radius: 24px; font-size: 0.9rem; cursor: pointer; transition: var(--transition-smooth); font-family: 'Outfit', sans-serif; font-weight: 600;">
+                <i class="fas fa-chart-pie" style="margin-right: 0.75rem; color: var(--primary);"></i>
+                Initialize Pulse Dashboard
+            </button>
+        </div>
+    </main>
+
+    <!-- Results Stream -->
+    <section id="resultsStream" class="dashboard-feed">
+        <!-- Dashboard Initial KPI Card (Hidden on load) -->
+        <div id="dashboardCard" class="feed-card" style="display: none;">
+            <div class="card-header">
+                <div class="card-title">
+                    <i class="fas fa-chart-line" style="color: var(--primary);"></i>
+                    <span>Real-Time Business Pulse</span>
+                </div>
+            </div>
+            <div class="kpi-row" id="dashboardKpis">
+                <!-- Dynamically populated -->
+            </div>
+            <div id="dashboardViz" style="margin-top: 3rem;"></div>
+        </div>
+        
+        <!-- Results will be prepended here -->
+    </section>
+
+    <!-- Knowledge Side Drawer -->
+    <aside id="knowledgeDrawer" class="side-drawer glass-panel">
+        <div class="drawer-header">
+            <span>Knowledge Index</span>
+            <button id="closeKnowledge" style="background: transparent; border: none; color: var(--text-bright); cursor: pointer; font-size: 1.2rem;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div id="schemaContainer" class="schema-list">
+            <!-- Loaded dynamically -->
+        </div>
+    </aside>
+
+    <!-- Nexus Atlas Overlay -->
+    <div id="atlasOverlay" class="atlas-overlay">
+        <div class="atlas-header">
+            <div class="brand">
+                <i class="fas fa-project-diagram"></i>
+                <span>Nexus Atlas Explorer</span>
+            </div>
+            <button id="closeAtlas" class="btn-close">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div id="atlasContainer" class="atlas-content">
+            <!-- vis-network engine -->
+        </div>
+
+        <!-- Node Detail Panel (Slide-in) -->
+        <div id="atlasDetails" class="atlas-details">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 2rem;">
+                <h2 id="detailTableName" style="font-family: 'Outfit'; font-size: 2rem; color: var(--text-bright);">Table Name</h2>
+                <button onclick="document.getElementById('atlasDetails').classList.remove('active')" style="background: transparent; border: none; cursor: pointer; color: var(--text-muted);">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <p id="detailTableDesc" style="color: var(--text-muted); margin-bottom: 2rem; font-size: 1.1rem;"></p>
+            
+            <h3 style="font-size: 0.9rem; text-transform: uppercase; letter-spacing: 2px; color: var(--text-muted); margin-bottom: 1rem;">Column Definitions</h3>
+            <div id="detailCols" style="margin-bottom: 3rem; display: flex; flex-wrap: wrap; gap: 0.5rem;"></div>
+
+            <h3 style="font-size: 0.9rem; text-transform: uppercase; letter-spacing: 2px; color: var(--text-muted); margin-bottom: 1rem;">Live Data Preview</h3>
+            <div class="table-wrap" style="border: 1px solid var(--border-soft);">
+                <table id="detailSampleTbl"></table>
+            </div>
+        </div>
+
+        <div class="atlas-footer">
+            <p><i class="fas fa-mouse-pointer"></i> Click a node to explore deeper indices. <i class="fas fa-arrows-alt" style="margin-left: 1rem;"></i> Drag nodes to reorganize logical view.</p>
+        </div>
+    </div>
+
+
+    <!-- DB Upload Modal -->
+    <div id="uploadModal" class="modal-overlay">
+        <div class="upload-modal">
+            <button class="modal-close" id="closeUploadModal"><i class="fas fa-times"></i></button>
+            <div class="modal-title">Connect Your Database</div>
+            <p class="modal-subtitle">Upload any SQLite database and QueryMind AI will instantly learn its schema and let you query it in natural language.</p>
+
+            <div class="drop-zone" id="dropZone">
+                <input type="file" id="dbFileInput" accept=".db,.sqlite,.sqlite3">
+                <div class="drop-zone-icon"><i class="fas fa-database"></i></div>
+                <div class="drop-zone-title">Drop your database here</div>
+                <div class="drop-zone-sub">.db &middot; .sqlite &middot; .sqlite3 &nbsp;|&nbsp; Max 100MB</div>
+            </div>
+
+            <div class="upload-progress" id="uploadProgress">
+                <div class="progress-bar-wrap">
+                    <div class="progress-bar-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-label" id="progressLabel">Uploading and analyzing schema...</div>
+            </div>
+
+            <div class="upload-success" id="uploadSuccess">
+                <div class="upload-success-header">
+                    <i class="fas fa-check-circle" style="color: #10b981; font-size: 1.2rem;"></i>
+                    <span id="uploadSuccessTitle">Schema detected!</span>
+                </div>
+                <div style="font-size: 0.85rem; color: #047857;">Found <strong id="tableCountLabel">0</strong> tables, <strong id="relCountLabel">0</strong> relationships</div>
+                <div class="detected-tables" id="detectedTablesList"></div>
+                <button class="use-db-btn" id="useThisDbBtn">
+                    <i class="fas fa-bolt" style="margin-right: 0.5rem;"></i>
+                    Query This Database
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Core Logic -->
+    <script src="js/app.js"></script>
+</body>
+</html>
