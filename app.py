@@ -1,4 +1,5 @@
 """QueryMind AI - Streamlit UI (Lite Edition)."""
+
 import uuid
 from typing import Any
 
@@ -58,7 +59,9 @@ def get_components():
     }
 
 
-def process_query(query: str, components: dict, previous_intent: QueryIntent | None) -> dict[str, Any]:
+def process_query(
+    query: str, components: dict, previous_intent: QueryIntent | None
+) -> dict[str, Any]:
     """Process a user query through the Lite pipeline."""
     parser_llm = components["parser_llm"]
     parser_rules = components["parser_rules"]
@@ -74,7 +77,9 @@ def process_query(query: str, components: dict, previous_intent: QueryIntent | N
 
     # Step 1: Parse intent
     intent = None
-    is_refinement = previous_intent is not None and any(word in query.lower() for word in ["only", "just", "now", "add", "with"])
+    is_refinement = previous_intent is not None and any(
+        word in query.lower() for word in ["only", "just", "now", "add", "with"]
+    )
 
     # Try LLM Parser first if allowed
     if st.session_state.get("use_llm"):
@@ -93,11 +98,7 @@ def process_query(query: str, components: dict, previous_intent: QueryIntent | N
     # Step 3: Validate intent
     is_valid, error = validator.validate_intent(intent, schema_info)
     if not is_valid:
-        return {
-            "success": False,
-            "error": error,
-            "intent": intent,
-        }
+        return {"success": False, "error": error, "intent": intent}
 
     # Step 4: Generate SQL
     sql_query, sql_params = query_generator.generate(intent, schema_info)
@@ -105,35 +106,22 @@ def process_query(query: str, components: dict, previous_intent: QueryIntent | N
     # Step 5: Validate SQL
     is_valid, error = validator.validate(sql_query, schema_info)
     if not is_valid:
-        return {
-            "success": False,
-            "error": error,
-            "intent": intent,
-            "sql": sql_query,
-        }
+        return {"success": False, "error": error, "intent": intent, "sql": sql_query}
 
     # Step 6: Execute query (Returns List[Dict] now)
     result = execution_engine.execute(sql_query, sql_params)
 
     if not result.success:
-        return {
-            "success": False,
-            "error": result.error,
-            "intent": intent,
-            "sql": sql_query,
-        }
+        return {"success": False, "error": result.error, "intent": intent, "sql": sql_query}
 
     # Step 7: Generate visualization (Works with List[Dict])
     intent_dict = intent.model_dump()
-    chart_type = intent.chart if hasattr(intent, 'chart') and intent.chart else "auto"
+    chart_type = intent.chart if hasattr(intent, "chart") and intent.chart else "auto"
     fig = viz_generator.generate_chart(result.data, intent_dict, chart_type)
 
     # Step 8: Generate explanation (Works with List[Dict])
     explanation = explanation_generator.generate(
-        intent_dict,
-        sql_query,
-        result.data,
-        is_refinement=is_refinement
+        intent_dict, sql_query, result.data, is_refinement=is_refinement
     )
 
     return {
@@ -149,21 +137,20 @@ def process_query(query: str, components: dict, previous_intent: QueryIntent | N
 
 def main():
     """Main Streamlit application."""
-    st.set_page_config(
-        page_title="QueryMind AI | Lite Mode",
-        page_icon="🧠",
-        layout="wide"
-    )
+    st.set_page_config(page_title="QueryMind AI | Lite Mode", page_icon="🧠", layout="wide")
 
     # Premium Style Shim
-    st.markdown("""
+    st.markdown(
+        """
         <style>
         .stApp { background-color: #0b0e14; color: #e2e8f0; }
         [data-testid="stSidebar"] { background-color: #12161f; border-right: 1px solid rgba(255,255,255,0.05); }
         .stMetric { background: rgba(255,255,255,0.03); padding: 1rem; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05); }
         h1, h2, h3 { font-family: 'Outfit', sans-serif; color: #3b82f6; }
         </style>
-        """, unsafe_allow_html=True)
+        """,
+        unsafe_allow_html=True,
+    )
 
     # Initialize
     init_session()
@@ -181,7 +168,7 @@ def main():
         st.markdown("""
         **Lite Mode Active**
         The system is running on a memory-optimized core without heavy data-science overhead.
-        
+
         **Example queries:**
         - Show top products by revenue
         - Total orders by city
@@ -208,9 +195,8 @@ def main():
     if st.button("Run Query", type="primary") or (query and st.session_state.last_query != query):
         with st.spinner("Executing agentic analysis..."):
             # Determine if refinement
-            is_refinement = (
-                st.session_state.previous_intent is not None and
-                any(word in query.lower() for word in ["only", "just", "now", "add", "with"])
+            is_refinement = st.session_state.previous_intent is not None and any(
+                word in query.lower() for word in ["only", "just", "now", "add", "with"]
             )
 
             previous = st.session_state.previous_intent if is_refinement else None
@@ -222,10 +208,7 @@ def main():
 
             if result["success"]:
                 # Store in history
-                st.session_state.history.append({
-                    "query": query,
-                    "result": result,
-                })
+                st.session_state.history.append({"query": query, "result": result})
 
                 # Update previous intent
                 st.session_state.previous_intent = result["intent"]
@@ -264,11 +247,11 @@ def main():
     if st.session_state.history:
         st.divider()
         st.subheader("Query History")
-        for i, item in enumerate(reversed(st.session_state.history[-3:])):
+        for _i, item in enumerate(reversed(st.session_state.history[-3:])):
             with st.expander(f"Previous Analysis: {item['query'][:60]}..."):
                 st.markdown(f"**Query:** {item['query']}")
-                st.code(item['result'].get('sql', 'N/A'), language="sql")
-                st.write(item['result'].get('explanation', ''))
+                st.code(item["result"].get("sql", "N/A"), language="sql")
+                st.write(item["result"].get("explanation", ""))
 
 
 if __name__ == "__main__":

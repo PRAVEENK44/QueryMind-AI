@@ -1,4 +1,5 @@
 """Enhanced Explanation Generator - With LLM insights."""
+
 from typing import Any
 
 from src.llm.client import get_llm_client
@@ -16,11 +17,7 @@ class ExplanationGenerator:
         self._fallback = _RuleBasedExplainer()
 
     def generate(
-        self,
-        intent: dict[str, Any],
-        sql_query: str,
-        result: Any,
-        is_refinement: bool = False,
+        self, intent: dict[str, Any], sql_query: str, result: Any, is_refinement: bool = False
     ) -> str:
         """Generate explanation for query and results."""
         # Always get rule-based explanation first
@@ -37,10 +34,7 @@ class ExplanationGenerator:
         return rule_explanation
 
     def _generate_llm_insights(
-        self,
-        intent: dict[str, Any],
-        sql_query: str,
-        result: Any,
+        self, intent: dict[str, Any], sql_query: str, result: Any
     ) -> str | None:
         """Generate LLM-powered insights."""
         try:
@@ -52,19 +46,11 @@ class ExplanationGenerator:
             if result.empty:
                 return None
 
-            data_dict = {
-                "data": result.head(10).to_dict("records"),
-                "row_count": len(result),
-            }
+            data_dict = {"data": result.head(10).to_dict("records"), "row_count": len(result)}
 
             context = f"Query type: {intent.get('aggregation', 'sum')} of {intent.get('metric', 'amount')} grouped by {intent.get('group_by', 'none')}"
 
-            return llm.generate_insights(
-                query="",
-                sql=sql_query,
-                data=data_dict,
-                context=context,
-            )
+            return llm.generate_insights(query="", sql=sql_query, data=data_dict, context=context)
         except Exception as e:
             print(f"LLM insight generation failed: {e}")
             return None
@@ -78,11 +64,7 @@ class _RuleBasedExplainer:
     """Rule-based explanation fallback."""
 
     def explain(
-        self,
-        intent: dict[str, Any],
-        sql_query: str,
-        result: Any,
-        is_refinement: bool = False,
+        self, intent: dict[str, Any], sql_query: str, result: Any, is_refinement: bool = False
     ) -> str:
         """Generate rule-based explanation."""
         parts = []

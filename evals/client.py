@@ -1,4 +1,5 @@
 """Unified LLM Client for Eval Harness — NVIDIA Nemotron primary, Gemini fallback, Ollama fallback."""
+
 import json
 import os
 import time
@@ -50,7 +51,7 @@ class EvalLLMClient:
 
     @property
     def nvidia_client(self) -> httpx.Client:
-        if not hasattr(self, '_nvidia_client') or self._nvidia_client is None:
+        if not hasattr(self, "_nvidia_client") or self._nvidia_client is None:
             self._nvidia_client = httpx.Client(
                 base_url="https://integrate.api.nvidia.com/v1",
                 headers={
@@ -96,10 +97,7 @@ class EvalLLMClient:
             return False
 
     def chat(
-        self,
-        messages: list[dict[str, str]],
-        temperature: float = 0.2,
-        max_tokens: int = 2000,
+        self, messages: list[dict[str, str]], temperature: float = 0.2, max_tokens: int = 2000
     ) -> str | None:
         """Send chat completion with auto-fallback and retry on 503/429."""
         start = time.time()
@@ -113,8 +111,10 @@ class EvalLLMClient:
                     return result
                 except httpx.HTTPStatusError as e:
                     if e.response.status_code in (429, 503) and attempt < 4:
-                        wait = min(2 ** attempt * 5, 60)  # 5s, 10s, 20s, 40s, max 60s
-                        print(f"NVIDIA {e.response.status_code} (attempt {attempt+1}/5), waiting {wait}s...")
+                        wait = min(2**attempt * 5, 60)  # 5s, 10s, 20s, 40s, max 60s
+                        print(
+                            f"NVIDIA {e.response.status_code} (attempt {attempt + 1}/5), waiting {wait}s..."
+                        )
                         time.sleep(wait)
                         continue
                     print(f"NVIDIA failed, falling back to Gemini: {e}")
@@ -132,8 +132,10 @@ class EvalLLMClient:
                     return result
                 except httpx.HTTPStatusError as e:
                     if e.response.status_code in (429, 503) and attempt < 4:
-                        wait = min(2 ** attempt * 5, 60)  # 5s, 10s, 20s, 40s, max 60s
-                        print(f"Gemini {e.response.status_code} (attempt {attempt+1}/5), waiting {wait}s...")
+                        wait = min(2**attempt * 5, 60)  # 5s, 10s, 20s, 40s, max 60s
+                        print(
+                            f"Gemini {e.response.status_code} (attempt {attempt + 1}/5), waiting {wait}s..."
+                        )
                         time.sleep(wait)
                         continue
                     print(f"Gemini failed, falling back to Ollama: {e}")
@@ -154,10 +156,7 @@ class EvalLLMClient:
         return None
 
     def _gemini_chat(
-        self,
-        messages: list[dict[str, str]],
-        temperature: float,
-        max_tokens: int,
+        self, messages: list[dict[str, str]], temperature: float, max_tokens: int
     ) -> str | None:
         """Gemini 2.5 Flash Lite chat completion."""
         # Convert to Gemini format
@@ -168,26 +167,26 @@ class EvalLLMClient:
             if msg["role"] == "system":
                 system_prompt = msg["content"]
             else:
-                gemini_messages.append({
-                    "role": "user" if msg["role"] == "user" else "model",
-                    "parts": [{"text": msg["content"]}],
-                })
+                gemini_messages.append(
+                    {
+                        "role": "user" if msg["role"] == "user" else "model",
+                        "parts": [{"text": msg["content"]}],
+                    }
+                )
 
         # Prepend system prompt to first user message if exists
         if system_prompt and gemini_messages:
-            gemini_messages[0]["parts"][0]["text"] = f"{system_prompt}\n\n{gemini_messages[0]['parts'][0]['text']}"
+            gemini_messages[0]["parts"][0]["text"] = (
+                f"{system_prompt}\n\n{gemini_messages[0]['parts'][0]['text']}"
+            )
 
         payload = {
             "contents": gemini_messages,
-            "generationConfig": {
-                "temperature": temperature,
-                "maxOutputTokens": max_tokens,
-            },
+            "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens},
         }
 
         resp = self.gemini_client.post(
-            f"/models/{self.GEMINI_MODEL}:generateContent?key={self.gemini_api_key}",
-            json=payload,
+            f"/models/{self.GEMINI_MODEL}:generateContent?key={self.gemini_api_key}", json=payload
         )
         resp.raise_for_status()
         data = resp.json()
@@ -204,22 +203,21 @@ class EvalLLMClient:
         # Gemini 2.5 Flash Lite pricing: $0.075/1M input, $0.30/1M output (as of 2025)
         cost = (p_tokens * 0.075 / 1_000_000) + (c_tokens * 0.30 / 1_000_000)
 
-        self.last_usage.update({
-            "provider": "gemini",
-            "model": self.GEMINI_MODEL,
-            "prompt_tokens": p_tokens,
-            "completion_tokens": c_tokens,
-            "total_tokens": p_tokens + c_tokens,
-            "cost_usd": round(cost, 6),
-        })
+        self.last_usage.update(
+            {
+                "provider": "gemini",
+                "model": self.GEMINI_MODEL,
+                "prompt_tokens": p_tokens,
+                "completion_tokens": c_tokens,
+                "total_tokens": p_tokens + c_tokens,
+                "cost_usd": round(cost, 6),
+            }
+        )
 
         return data["message"]["content"]
 
     def _nvidia_chat(
-        self,
-        messages: list[dict[str, str]],
-        temperature: float,
-        max_tokens: int,
+        self, messages: list[dict[str, str]], temperature: float, max_tokens: int
     ) -> str | None:
         """NVIDIA Nemotron 3 Ultra chat completion with retry on 503/429."""
         # Convert to OpenAI format (NVIDIA uses OpenAI-compatible API)
@@ -259,20 +257,24 @@ class EvalLLMClient:
                 # Nemotron pricing (estimated, adjust as needed)
                 cost = (p_tokens * 0.0001 / 1_000_000) + (c_tokens * 0.0001 / 1_000_000)
 
-                self.last_usage.update({
-                    "provider": "nvidia",
-                    "model": self.NVIDIA_MODEL,
-                    "prompt_tokens": p_tokens,
-                    "completion_tokens": c_tokens,
-                    "total_tokens": p_tokens + c_tokens,
-                    "cost_usd": round(cost, 6),
-                })
+                self.last_usage.update(
+                    {
+                        "provider": "nvidia",
+                        "model": self.NVIDIA_MODEL,
+                        "prompt_tokens": p_tokens,
+                        "completion_tokens": c_tokens,
+                        "total_tokens": p_tokens + c_tokens,
+                        "cost_usd": round(cost, 6),
+                    }
+                )
 
                 return content
             except httpx.HTTPStatusError as e:
                 if e.response.status_code in (429, 503) and attempt < 4:
-                    wait = min(2 ** attempt * 5, 60)  # 5s, 10s, 20s, 40s, max 60s
-                    print(f"NVIDIA {e.response.status_code} (attempt {attempt+1}/5), waiting {wait}s...")
+                    wait = min(2**attempt * 5, 60)  # 5s, 10s, 20s, 40s, max 60s
+                    print(
+                        f"NVIDIA {e.response.status_code} (attempt {attempt + 1}/5), waiting {wait}s..."
+                    )
                     time.sleep(wait)
                     continue
                 print(f"NVIDIA failed: {e}")
@@ -284,10 +286,7 @@ class EvalLLMClient:
         return None
 
     def _ollama_chat(
-        self,
-        messages: list[dict[str, str]],
-        temperature: float,
-        max_tokens: int,
+        self, messages: list[dict[str, str]], temperature: float, max_tokens: int
     ) -> str | None:
         """Ollama chat completion."""
         ollama_messages = []
@@ -317,14 +316,16 @@ class EvalLLMClient:
         p_tokens = data.get("prompt_eval_count", len(str(messages)) // 4)
         c_tokens = data.get("eval_count", len(data["message"]["content"]) // 4)
 
-        self.last_usage.update({
-            "provider": "ollama",
-            "model": self.OLLAMA_MODEL,
-            "prompt_tokens": p_tokens,
-            "completion_tokens": c_tokens,
-            "total_tokens": p_tokens + c_tokens,
-            "cost_usd": 0.0,
-        })
+        self.last_usage.update(
+            {
+                "provider": "ollama",
+                "model": self.OLLAMA_MODEL,
+                "prompt_tokens": p_tokens,
+                "completion_tokens": c_tokens,
+                "total_tokens": p_tokens + c_tokens,
+                "cost_usd": 0.0,
+            }
+        )
 
         return data["message"]["content"]
 
@@ -338,11 +339,17 @@ class EvalLLMClient:
         """Get structured JSON output."""
         # Use NVIDIA-specific structured output if NVIDIA is preferred and available
         if self.prefer_nvidia and self.is_nvidia_available():
-            return self._nvidia_structured_output(system_prompt, user_prompt, response_schema, temperature)
+            return self._nvidia_structured_output(
+                system_prompt, user_prompt, response_schema, temperature
+            )
         elif self.prefer_gemini and self.is_gemini_available():
-            return self._gemini_structured_output(system_prompt, user_prompt, response_schema, temperature)
+            return self._gemini_structured_output(
+                system_prompt, user_prompt, response_schema, temperature
+            )
         elif self.is_ollama_available():
-            return self._ollama_structured_output(system_prompt, user_prompt, response_schema, temperature)
+            return self._ollama_structured_output(
+                system_prompt, user_prompt, response_schema, temperature
+            )
         return None
 
     def _nvidia_structured_output(
@@ -360,14 +367,18 @@ class EvalLLMClient:
         format_instruction = f"""
 
 OUTPUT FORMAT: You MUST respond with ONLY a valid JSON object. No markdown, no explanation, no text before or after.
-Required fields: {', '.join(required)}
+Required fields: {", ".join(required)}
 Fields and types: {json.dumps({k: v.get("type", "string") for k, v in schema_props.items()})}
 The sql_query field MUST contain ONLY the raw SQL query string.
 Example valid output:
 {json.dumps(dict.fromkeys(required, "example_value"), indent=2)}"""
 
         messages = [
-            {"role": "system", "content": system_prompt + "\n\nCRITICAL: Output ONLY the JSON object. No explanations, no markdown, no extra text."},
+            {
+                "role": "system",
+                "content": system_prompt
+                + "\n\nCRITICAL: Output ONLY the JSON object. No explanations, no markdown, no extra text.",
+            },
             {"role": "user", "content": user_prompt + format_instruction},
         ]
 
@@ -391,13 +402,17 @@ Example valid output:
         format_instruction = f"""
 
 OUTPUT FORMAT: You MUST respond with ONLY a valid JSON object. No markdown, no explanation.
-Required fields: {', '.join(required)}
+Required fields: {", ".join(required)}
 Fields and types: {json.dumps({k: v.get("type", "string") for k, v in schema_props.items()})}
 Example valid output:
 {json.dumps(dict.fromkeys(required, "example_value"), indent=2)}"""
 
         messages = [
-            {"role": "system", "content": system_prompt + "\n\nCRITICAL: Output ONLY the JSON object. No explanations, no markdown, no extra text."},
+            {
+                "role": "system",
+                "content": system_prompt
+                + "\n\nCRITICAL: Output ONLY the JSON object. No explanations, no markdown, no extra text.",
+            },
             {"role": "user", "content": user_prompt + format_instruction},
         ]
 
@@ -421,13 +436,17 @@ Example valid output:
         format_instruction = f"""
 
 OUTPUT FORMAT: You MUST respond with ONLY a valid JSON object. No markdown, no explanation.
-Required fields: {', '.join(required)}
+Required fields: {", ".join(required)}
 Fields and types: {json.dumps({k: v.get("type", "string") for k, v in schema_props.items()})}
 Example valid output:
 {json.dumps(dict.fromkeys(required, "example_value"), indent=2)}"""
 
         messages = [
-            {"role": "system", "content": system_prompt + "\n\nCRITICAL: Output ONLY the JSON object. No explanations, no markdown, no extra text."},
+            {
+                "role": "system",
+                "content": system_prompt
+                + "\n\nCRITICAL: Output ONLY the JSON object. No explanations, no markdown, no extra text.",
+            },
             {"role": "user", "content": user_prompt + format_instruction},
         ]
 
@@ -449,6 +468,7 @@ Example valid output:
 
         # Code block
         import re
+
         match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
         if match:
             try:

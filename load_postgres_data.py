@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Load synthetic data into PostgreSQL for QueryMind AI."""
+
 import random
 from datetime import datetime, timedelta
 
@@ -7,11 +8,15 @@ import psycopg2
 from psycopg2.extras import execute_batch
 
 
-def get_connection(dbname="querymind", user="querymind_rw_user", password="readwrite_password_change_in_prod", host="localhost", port=5432):
+def get_connection(
+    dbname="querymind",
+    user="querymind_rw_user",
+    password="readwrite_password_change_in_prod",
+    host="localhost",
+    port=5432,
+):
     """Get PostgreSQL connection."""
-    return psycopg2.connect(
-        dbname=dbname, user=user, password=password, host=host, port=port
-    )
+    return psycopg2.connect(dbname=dbname, user=user, password=password, host=host, port=port)
 
 
 def load_data():
@@ -28,22 +33,70 @@ def load_data():
             ("Marketing", "APAC", 2000000),
             ("Support", "NAMER", 1500000),
         ]
-        execute_batch(cur, "INSERT INTO departments (name, region, budget) VALUES (%s, %s, %s)", depts)
+        execute_batch(
+            cur, "INSERT INTO departments (name, region, budget) VALUES (%s, %s, %s)", depts
+        )
 
         print("Loading employees and salaries...")
-        first_names = ["James", "Mary", "Robert", "Patricia", "John", "Jennifer", "Michael", "Linda", "William", "Elizabeth",
-                       "David", "Barbara", "Richard", "Susan", "Joseph", "Jessica", "Thomas", "Sarah", "Charles", "Karen"]
-        last_names = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez",
-                      "Hernandez", "Lopez", "Gonzalez", "Wilson", "Anderson", "Thomas", "Taylor", "Moore", "Jackson", "Martin"]
+        first_names = [
+            "James",
+            "Mary",
+            "Robert",
+            "Patricia",
+            "John",
+            "Jennifer",
+            "Michael",
+            "Linda",
+            "William",
+            "Elizabeth",
+            "David",
+            "Barbara",
+            "Richard",
+            "Susan",
+            "Joseph",
+            "Jessica",
+            "Thomas",
+            "Sarah",
+            "Charles",
+            "Karen",
+        ]
+        last_names = [
+            "Smith",
+            "Johnson",
+            "Williams",
+            "Brown",
+            "Jones",
+            "Garcia",
+            "Miller",
+            "Davis",
+            "Rodriguez",
+            "Martinez",
+            "Hernandez",
+            "Lopez",
+            "Gonzalez",
+            "Wilson",
+            "Anderson",
+            "Thomas",
+            "Taylor",
+            "Moore",
+            "Jackson",
+            "Martin",
+        ]
 
         emp_data = []
-        for i in range(1, 151):
+        for _i in range(1, 151):
             d_id = random.randint(1, 4)
             h_date = (datetime.now() - timedelta(days=random.randint(100, 2000))).date()
-            emp_data.append((d_id, random.choice(first_names), random.choice(last_names), h_date, "Active"))
+            emp_data.append(
+                (d_id, random.choice(first_names), random.choice(last_names), h_date, "Active")
+            )
 
-        execute_batch(cur, """INSERT INTO employees (dept_id, first_name, last_name, hire_date, status) 
-                             VALUES (%s, %s, %s, %s, %s)""", emp_data)
+        execute_batch(
+            cur,
+            """INSERT INTO employees (dept_id, first_name, last_name, hire_date, status)
+                             VALUES (%s, %s, %s, %s, %s)""",
+            emp_data,
+        )
 
         # Get employee IDs
         cur.execute("SELECT emp_id, hire_date FROM employees ORDER BY emp_id")
@@ -55,8 +108,12 @@ def load_data():
             bonus = round(base * random.uniform(0.05, 0.2), 2)
             sal_data.append((emp_id, base, bonus, hire_date))
 
-        execute_batch(cur, """INSERT INTO salaries (emp_id, base_salary, bonus, effective_date) 
-                             VALUES (%s, %s, %s, %s)""", sal_data)
+        execute_batch(
+            cur,
+            """INSERT INTO salaries (emp_id, base_salary, bonus, effective_date)
+                             VALUES (%s, %s, %s, %s)""",
+            sal_data,
+        )
 
         print("Loading campaigns...")
         camp_data = [
@@ -65,8 +122,12 @@ def load_data():
             ("Winter Cloud Event", "Email", "2024-11-01", "2024-12-31", 30000, 85),
             ("Enterprise Summit", "Event", "2025-02-15", "2025-02-20", 250000, 340),
         ]
-        execute_batch(cur, """INSERT INTO campaigns (name, channel, start_date, end_date, budget, roi_percent) 
-                             VALUES (%s, %s, %s, %s, %s, %s)""", camp_data)
+        execute_batch(
+            cur,
+            """INSERT INTO campaigns (name, channel, start_date, end_date, budget, roi_percent)
+                             VALUES (%s, %s, %s, %s, %s, %s)""",
+            camp_data,
+        )
 
         print("Loading customers...")
         industries = ["Finance", "Healthcare", "Tech", "Manufacturing", "Retail"]
@@ -74,8 +135,12 @@ def load_data():
         for i in range(1, 401):
             c_id = random.randint(1, 4)
             cust_data.append((f"CorpEntity {i} LLC", random.choice(industries), c_id, 0))
-        execute_batch(cur, """INSERT INTO customers (company_name, industry, campaign_source_id, total_ltv) 
-                             VALUES (%s, %s, %s, %s)""", cust_data)
+        execute_batch(
+            cur,
+            """INSERT INTO customers (company_name, industry, campaign_source_id, total_ltv)
+                             VALUES (%s, %s, %s, %s)""",
+            cust_data,
+        )
 
         print("Loading interactions...")
         int_data = []
@@ -83,34 +148,70 @@ def load_data():
             c_id = random.randint(1, 400)
             e_id = random.randint(1, 150)
             date = (datetime.now() - timedelta(days=random.randint(1, 365))).date()
-            int_data.append((c_id, e_id, random.choice(["Call", "Email", "Ticket"]), date, round(random.uniform(1.0, 10.0), 2)))
-        execute_batch(cur, """INSERT INTO interactions (customer_id, emp_id, type, date, sentiment_score) 
-                             VALUES (%s, %s, %s, %s, %s)""", int_data)
+            int_data.append(
+                (
+                    c_id,
+                    e_id,
+                    random.choice(["Call", "Email", "Ticket"]),
+                    date,
+                    round(random.uniform(1.0, 10.0), 2),
+                )
+            )
+        execute_batch(
+            cur,
+            """INSERT INTO interactions (customer_id, emp_id, type, date, sentiment_score)
+                             VALUES (%s, %s, %s, %s, %s)""",
+            int_data,
+        )
 
         print("Loading warehouses...")
-        wh_data = [("New York Hub", 50000, 10), ("London Central", 45000, 20), ("Tokyo Apex", 30000, 30)]
-        execute_batch(cur, "INSERT INTO warehouses (location, capacity, manager_emp_id) VALUES (%s, %s, %s)", wh_data)
+        wh_data = [
+            ("New York Hub", 50000, 10),
+            ("London Central", 45000, 20),
+            ("Tokyo Apex", 30000, 30),
+        ]
+        execute_batch(
+            cur,
+            "INSERT INTO warehouses (location, capacity, manager_emp_id) VALUES (%s, %s, %s)",
+            wh_data,
+        )
 
         print("Loading suppliers...")
-        sup_data = [("GlobalTech", "USA", 4.8), ("EuroParts", "Germany", 4.5), ("AsiaChips", "Taiwan", 4.9)]
-        execute_batch(cur, "INSERT INTO suppliers (name, country, rating) VALUES (%s, %s, %s)", sup_data)
+        sup_data = [
+            ("GlobalTech", "USA", 4.8),
+            ("EuroParts", "Germany", 4.5),
+            ("AsiaChips", "Taiwan", 4.9),
+        ]
+        execute_batch(
+            cur, "INSERT INTO suppliers (name, country, rating) VALUES (%s, %s, %s)", sup_data
+        )
 
         print("Loading products...")
         prod_data = []
         for i in range(1, 51):
             s_id = random.randint(1, 3)
             cost = round(random.uniform(500, 5000), 2)
-            prod_data.append((s_id, f"Enterprise Server Gen{i}", "Hardware", cost, round(cost * 1.6, 2)))
-        execute_batch(cur, """INSERT INTO products (supplier_id, name, category, unit_cost, msrp) 
-                             VALUES (%s, %s, %s, %s, %s)""", prod_data)
+            prod_data.append(
+                (s_id, f"Enterprise Server Gen{i}", "Hardware", cost, round(cost * 1.6, 2))
+            )
+        execute_batch(
+            cur,
+            """INSERT INTO products (supplier_id, name, category, unit_cost, msrp)
+                             VALUES (%s, %s, %s, %s, %s)""",
+            prod_data,
+        )
 
         print("Loading inventory...")
         inv_data = []
         for p_id in range(1, 51):
             for w_id in range(1, 4):
                 inv_data.append((w_id, p_id, random.randint(50, 1000), 100))
-        execute_batch(cur, """INSERT INTO inventory (warehouse_id, product_id, quantity_on_hand, restock_threshold) 
-                             VALUES (%s, %s, %s, %s)""", inv_data)
+        execute_batch(
+            cur,
+            """INSERT INTO inventory (warehouse_id, product_id, quantity_on_hand, restock_threshold)
+                             VALUES (%s, %s, %s, %s)""",
+            inv_data,
+        )
 
         print("Loading orders, order_items, shipments, invoices...")
         cur.execute("SELECT product_id, msrp FROM products")
@@ -131,7 +232,9 @@ def load_data():
             date_obj = datetime.now() - timedelta(days=random.randint(1, 700))
             date = date_obj.date()
 
-            status = random.choice(["Completed", "Completed", "Completed", "Processing", "Cancelled"])
+            status = random.choice(
+                ["Completed", "Completed", "Completed", "Processing", "Cancelled"]
+            )
             order_total = 0
 
             for _ in range(random.randint(1, 5)):
@@ -148,25 +251,61 @@ def load_data():
             if status != "Cancelled":
                 w_id = random.randint(1, 3)
                 d_date = (date_obj + timedelta(days=random.randint(1, 3))).date()
-                del_date = (date_obj + timedelta(days=random.randint(4, 10))).date() if status == "Completed" else None
-                ship_data.append((o_id, w_id, d_date, del_date, "Delivered" if status == "Completed" else "In Transit"))
+                del_date = (
+                    (date_obj + timedelta(days=random.randint(4, 10))).date()
+                    if status == "Completed"
+                    else None
+                )
+                ship_data.append(
+                    (
+                        o_id,
+                        w_id,
+                        d_date,
+                        del_date,
+                        "Delivered" if status == "Completed" else "In Transit",
+                    )
+                )
 
             due = (date_obj + timedelta(days=30)).date()
-            paid = (date_obj + timedelta(days=random.randint(5, 45))).date() if status == "Completed" else None
-            inv_docs.append((o_id, date, due, paid, "Paid" if paid else "Pending", round(order_total, 2)))
+            paid = (
+                (date_obj + timedelta(days=random.randint(5, 45))).date()
+                if status == "Completed"
+                else None
+            )
+            inv_docs.append(
+                (o_id, date, due, paid, "Paid" if paid else "Pending", round(order_total, 2))
+            )
 
-        execute_batch(cur, """INSERT INTO orders (customer_id, sales_rep_emp_id, date, total_amount, status) 
-                             VALUES (%s, %s, %s, %s, %s)""", order_data)
-        execute_batch(cur, """INSERT INTO order_items (order_id, product_id, quantity, subtotal) 
-                             VALUES (%s, %s, %s, %s)""", item_data)
-        execute_batch(cur, """INSERT INTO shipments (order_id, warehouse_id, dispatch_date, delivery_date, status) 
-                             VALUES (%s, %s, %s, %s, %s)""", ship_data)
-        execute_batch(cur, """INSERT INTO invoices (order_id, issue_date, due_date, paid_date, status, amount) 
-                             VALUES (%s, %s, %s, %s, %s, %s)""", inv_docs)
+        execute_batch(
+            cur,
+            """INSERT INTO orders (customer_id, sales_rep_emp_id, date, total_amount, status)
+                             VALUES (%s, %s, %s, %s, %s)""",
+            order_data,
+        )
+        execute_batch(
+            cur,
+            """INSERT INTO order_items (order_id, product_id, quantity, subtotal)
+                             VALUES (%s, %s, %s, %s)""",
+            item_data,
+        )
+        execute_batch(
+            cur,
+            """INSERT INTO shipments (order_id, warehouse_id, dispatch_date, delivery_date, status)
+                             VALUES (%s, %s, %s, %s, %s)""",
+            ship_data,
+        )
+        execute_batch(
+            cur,
+            """INSERT INTO invoices (order_id, issue_date, due_date, paid_date, status, amount)
+                             VALUES (%s, %s, %s, %s, %s, %s)""",
+            inv_docs,
+        )
 
         print("Updating customer LTV...")
         ltv_updates = [(total, c_id) for c_id, total in customer_ltv.items()]
-        execute_batch(cur, "UPDATE customers SET total_ltv = %s WHERE customer_id = %s", ltv_updates)
+        execute_batch(
+            cur, "UPDATE customers SET total_ltv = %s WHERE customer_id = %s", ltv_updates
+        )
 
         conn.commit()
         print("Data load complete!")

@@ -1,4 +1,5 @@
 """Schema Analyzer - Loads and provides database schema information."""
+
 from typing import Any
 
 from src.database import get_schema

@@ -1,4 +1,5 @@
 """Intent Parser - Converts natural language into structured JSON."""
+
 import re
 
 from pydantic import BaseModel, Field
@@ -6,7 +7,10 @@ from pydantic import BaseModel, Field
 
 class QueryFilters(BaseModel):
     """Filters for the query."""
-    time_range: str | None = Field(default=None, description="Time range like 'last_6_months', 'last_year', etc.")
+
+    time_range: str | None = Field(
+        default=None, description="Time range like 'last_6_months', 'last_year', etc."
+    )
     city: str | None = Field(default=None, description="City filter")
     category: str | None = Field(default=None, description="Category filter")
     start_date: str | None = Field(default=None, description="Start date filter")
@@ -15,13 +19,19 @@ class QueryFilters(BaseModel):
 
 class QueryIntent(BaseModel):
     """Structured representation of user query."""
+
     metric: str = Field(default="", description="The metric to query (e.g., revenue, sales, count)")
-    aggregation: str = Field(default="count", description="Aggregation function: sum, count, avg, min, max")
+    aggregation: str = Field(
+        default="count", description="Aggregation function: sum, count, avg, min, max"
+    )
     group_by: str | None = Field(default=None, description="Field to group by")
     filters: QueryFilters = Field(default_factory=QueryFilters, description="Query filters")
     limit: int = Field(default=10, description="Number of results to return")
     chart: str = Field(default="auto", description="Chart type: auto, line, bar, pie, table")
-    sql_query: str = Field(default="", description="The explicitly synthesized LLM SQLite executable instruction mapping.")
+    sql_query: str = Field(
+        default="",
+        description="The explicitly synthesized LLM SQLite executable instruction mapping.",
+    )
 
 
 class IntentParser:
@@ -44,7 +54,6 @@ class IntentParser:
 
     METRIC_MAP = {
         "revenue": "amount",
-        "sales": "amount",
         "sales": "amount",
         "amount": "amount",
         "orders": "order_id",
@@ -70,7 +79,7 @@ class IntentParser:
     def parse(self, query: str, previous_intent: QueryIntent | None = None) -> QueryIntent:
         """
         Parse natural language query into structured intent.
-        
+
         If there's a previous intent and query contains refinement keywords,
         update the previous intent instead of starting fresh.
         """
@@ -112,11 +121,7 @@ class IntentParser:
         # Detect chart type
         chart = self._detect_chart_type(query, group_by, time_range)
 
-        filters = QueryFilters(
-            time_range=time_range,
-            city=city,
-            category=category,
-        )
+        filters = QueryFilters(time_range=time_range, city=city, category=category)
 
         return QueryIntent(
             metric=metric,
@@ -147,7 +152,7 @@ class IntentParser:
             chart=previous.chart,
         )
 
-        query_lower = query.lower()
+        query.lower()
 
         # Check for city filter
         city = self._detect_city(query)
@@ -204,7 +209,11 @@ class IntentParser:
         # Implicit groupings based on keywords
         if "by city" in query_lower or "revenue" in query_lower and "city" in query_lower:
             return "city"
-        if "by category" in query_lower or "distribution" in query_lower and "category" in query_lower:
+        if (
+            "by category" in query_lower
+            or "distribution" in query_lower
+            and "category" in query_lower
+        ):
             return "category"
         if "trend" in query_lower or "monthly" in query_lower:
             return "date"
@@ -229,7 +238,7 @@ class IntentParser:
 
     def _detect_time_range(self, query: str) -> str | None:
         """Detect time range from query."""
-        for keyword, value in self.TIME_RANGES.items():
+        for keyword, _value in self.TIME_RANGES.items():
             if keyword in query:
                 # Convert to rough date string
                 if "last" in keyword or "this" in keyword:

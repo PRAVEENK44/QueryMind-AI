@@ -1,4 +1,5 @@
 """Advanced Error Handling - Better error messages and recovery."""
+
 import re
 from dataclasses import dataclass
 
@@ -6,6 +7,7 @@ from dataclasses import dataclass
 @dataclass
 class QueryError:
     """Structured query error."""
+
     error_type: str  # syntax, validation, execution, timeout
     message: str
     sql片段: str | None = None
@@ -16,7 +18,7 @@ class QueryError:
 class ErrorHandler:
     """
     Advanced error handling with suggestions and recovery.
-    
+
     Handles:
     - SQL syntax errors
     - Validation errors
@@ -53,18 +55,14 @@ class ErrorHandler:
         },
     ]
 
-    def handle_error(
-        self,
-        error: Exception,
-        query: str | None = None,
-    ) -> QueryError:
+    def handle_error(self, error: Exception, query: str | None = None) -> QueryError:
         """
         Handle and categorize an error.
-        
+
         Args:
             error: The exception that occurred
             query: The SQL query that caused the error
-            
+
         Returns:
             Structured QueryError with suggestion
         """
@@ -78,7 +76,9 @@ class ErrorHandler:
                 # Fill in captured groups
                 for i, group in enumerate(match.groups()):
                     suggestion = suggestion.replace(f"{{{i}}}", group)
-                    suggestion = suggestion.replace(f"{{{pattern_def['pattern'].split(':')[1].strip()}}}", group)
+                    suggestion = suggestion.replace(
+                        f"{{{pattern_def['pattern'].split(':')[1].strip()}}}", group
+                    )
 
                 return QueryError(
                     error_type=pattern_def["type"],
@@ -187,14 +187,11 @@ class QueryRecovery:
         self.error_handler = error_handler
 
     def try_recovery(
-        self,
-        error: Exception,
-        intent: dict,
-        original_query: str,
+        self, error: Exception, intent: dict, original_query: str
     ) -> tuple[str | None, str | None]:
         """
         Attempt to recover from query failure.
-        
+
         Returns:
             Tuple of (recovery_query, recovery_intent) or (None, None)
         """

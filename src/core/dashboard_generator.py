@@ -1,11 +1,12 @@
 """Auto Dashboard Generator - Creates complete dashboards from single query."""
+
 from typing import Any
 
 
 class DashboardGenerator:
     """
     Generates complete dashboards from natural language requests.
-    
+
     Creates multiple visualizations, KPIs, and insights in one go.
     """
 
@@ -89,32 +90,22 @@ class DashboardGenerator:
             ],
         }
 
-    def generate(
-        self,
-        query: str,
-        execution_engine,
-        schema_info: dict,
-    ) -> dict[str, Any]:
+    def generate(self, query: str, execution_engine, schema_info: dict) -> dict[str, Any]:
         """
         Generate complete dashboard.
-        
+
         Args:
             query: User query (e.g., "show sales dashboard")
             execution_engine: SQL execution engine
             schema_info: Database schema
-            
+
         Returns:
             Dashboard data with KPIs, charts, insights
         """
         dashboard_type = self._detect_dashboard_type(query)
         queries = self.query_definitions.get(dashboard_type, self.query_definitions["sales"])
 
-        results = {
-            "type": dashboard_type,
-            "kpis": [],
-            "charts": [],
-            "insights": [],
-        }
+        results = {"type": dashboard_type, "kpis": [], "charts": [], "insights": []}
 
         for q_def in queries:
             result = execution_engine.execute(q_def["sql"])
@@ -122,24 +113,20 @@ class DashboardGenerator:
             if result.success and not result.data.empty:
                 if "chart" in q_def:
                     # This is a chart query
-                    fig = self._create_chart(
-                        result.data,
-                        q_def["chart"],
-                        q_def["metric"],
+                    fig = self._create_chart(result.data, q_def["chart"], q_def["metric"])
+                    results["charts"].append(
+                        {"title": q_def["metric"], "figure": fig, "type": q_def["chart"]}
                     )
-                    results["charts"].append({
-                        "title": q_def["metric"],
-                        "figure": fig,
-                        "type": q_def["chart"],
-                    })
                 else:
                     # This is a KPI
                     value = result.data.iloc[0]["value"]
-                    results["kpis"].append({
-                        "name": q_def["metric"],
-                        "value": value,
-                        "format": q_def.get("format", "number"),
-                    })
+                    results["kpis"].append(
+                        {
+                            "name": q_def["metric"],
+                            "value": value,
+                            "format": q_def.get("format", "number"),
+                        }
+                    )
 
         # Generate insights
         results["insights"] = self._generate_dashboard_insights(results)
@@ -156,14 +143,10 @@ class DashboardGenerator:
             return "customers"
         return "sales"
 
-    def _create_chart(
-        self,
-        df: Any,
-        chart_type: str,
-        title: str,
-    ) -> Any:
+    def _create_chart(self, df: Any, chart_type: str, title: str) -> Any:
         """Create a chart from data."""
         import plotly.graph_objects as go
+
         if chart_type == "line":
             x_col = df.columns[0]
             y_col = df.columns[-1]
@@ -233,11 +216,7 @@ class KPICard:
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""
-        return {
-            "name": self.name,
-            "value": self.format_value(),
-            "raw_value": self.value,
-        }
+        return {"name": self.name, "value": self.format_value(), "raw_value": self.value}
 
 
 def create_dashboard_generator() -> DashboardGenerator:

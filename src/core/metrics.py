@@ -7,82 +7,55 @@ query_latency_seconds = Histogram(
     "querymind_query_latency_seconds",
     "Query execution latency in seconds",
     ["endpoint", "status"],
-    buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0]
+    buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0],
 )
 
 query_total = Counter(
-    "querymind_query_total",
-    "Total number of queries executed",
-    ["endpoint", "status"]
+    "querymind_query_total", "Total number of queries executed", ["endpoint", "status"]
 )
 
 # Token usage and cost metrics
 query_tokens_total = Counter(
     "querymind_query_tokens_total",
     "Total tokens used for queries",
-    ["provider", "model", "type"]  # type: prompt, completion, total
+    ["provider", "model", "type"],  # token type: prompt, completion, total
 )
 
 query_cost_usd_total = Counter(
-    "querymind_query_cost_usd_total",
-    "Total cost in USD for queries",
-    ["provider", "model"]
+    "querymind_query_cost_usd_total", "Total cost in USD for queries", ["provider", "model"]
 )
 
 # Error metrics
 query_errors_total = Counter(
-    "querymind_query_errors_total",
-    "Total number of query errors",
-    ["endpoint", "error_type"]
+    "querymind_query_errors_total", "Total number of query errors", ["endpoint", "error_type"]
 )
 
 # Eval harness metrics
 eval_accuracy = Gauge(
-    "querymind_eval_accuracy",
-    "Current eval harness pass rate (percentage)",
-    ["run_id"]
+    "querymind_eval_accuracy", "Current eval harness pass rate (percentage)", ["run_id"]
 )
 
-eval_pass_rate = Gauge(
-    "querymind_eval_pass_rate",
-    "Eval harness pass rate percentage",
-)
+eval_pass_rate = Gauge("querymind_eval_pass_rate", "Eval harness pass rate percentage")
 
-eval_total_tests = Gauge(
-    "querymind_eval_total_tests",
-    "Total number of tests in eval run",
-)
+eval_total_tests = Gauge("querymind_eval_total_tests", "Total number of tests in eval run")
 
-eval_passed_tests = Gauge(
-    "querymind_eval_passed_tests",
-    "Number of passed tests in eval run",
-)
+eval_passed_tests = Gauge("querymind_eval_passed_tests", "Number of passed tests in eval run")
 
-eval_failed_tests = Gauge(
-    "querymind_eval_failed_tests",
-    "Number of failed tests in eval run",
-)
+eval_failed_tests = Gauge("querymind_eval_failed_tests", "Number of failed tests in eval run")
 
 eval_avg_latency_ms = Gauge(
-    "querymind_eval_avg_latency_ms",
-    "Average query latency in eval run (ms)",
+    "querymind_eval_avg_latency_ms", "Average query latency in eval run (ms)"
 )
 
-eval_total_tokens = Gauge(
-    "querymind_eval_total_tokens",
-    "Total tokens used in eval run",
-)
+eval_total_tokens = Gauge("querymind_eval_total_tokens", "Total tokens used in eval run")
 
-eval_total_cost_usd = Gauge(
-    "querymind_eval_total_cost_usd",
-    "Total cost in USD for eval run",
-)
+eval_total_cost_usd = Gauge("querymind_eval_total_cost_usd", "Total cost in USD for eval run")
 
 # Confidence scoring metrics
 confidence_score = Histogram(
     "querymind_confidence_score",
     "Overall confidence score for queries",
-    buckets=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    buckets=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
 )
 
 hallucination_detected_total = Counter(
@@ -91,21 +64,14 @@ hallucination_detected_total = Counter(
 )
 
 multi_query_disagreement_total = Counter(
-    "querymind_multi_query_disagreement_total",
-    "Total number of multi-query disagreements detected",
+    "querymind_multi_query_disagreement_total", "Total number of multi-query disagreements detected"
 )
 
 # System info
-system_info = Info(
-    "querymind_system",
-    "QueryMind AI system information"
-)
+system_info = Info("querymind_system", "QueryMind AI system information")
 
 # Active connections (if using connection pool)
-active_connections = Gauge(
-    "querymind_active_connections",
-    "Number of active database connections",
-)
+active_connections = Gauge("querymind_active_connections", "Number of active database connections")
 
 
 class MetricsRecorder:
@@ -116,11 +82,9 @@ class MetricsRecorder:
 
     def init_system_info(self, version: str = "0.1.0", environment: str = "development"):
         """Initialize system info metric."""
-        system_info.info({
-            "version": version,
-            "environment": environment,
-            "service": "querymind-ai"
-        })
+        system_info.info(
+            {"version": version, "environment": environment, "service": "querymind-ai"}
+        )
 
     def record_query_latency(self, endpoint: str, latency_seconds: float, success: bool):
         """Record query latency."""
@@ -131,8 +95,12 @@ class MetricsRecorder:
     def record_tokens(self, provider: str, model: str, prompt_tokens: int, completion_tokens: int):
         """Record token usage."""
         query_tokens_total.labels(provider=provider, model=model, type="prompt").inc(prompt_tokens)
-        query_tokens_total.labels(provider=provider, model=model, type="completion").inc(completion_tokens)
-        query_tokens_total.labels(provider=provider, model=model, type="total").inc(prompt_tokens + completion_tokens)
+        query_tokens_total.labels(provider=provider, model=model, type="completion").inc(
+            completion_tokens
+        )
+        query_tokens_total.labels(provider=provider, model=model, type="total").inc(
+            prompt_tokens + completion_tokens
+        )
 
     def record_cost(self, provider: str, model: str, cost_usd: float):
         """Record query cost."""

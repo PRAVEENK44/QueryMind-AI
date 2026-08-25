@@ -1,4 +1,5 @@
 """Confidence Scoring - Hallucination detection and multi-query validation."""
+
 from dataclasses import dataclass
 
 from src.llm.client import LLMClient, get_llm_client
@@ -7,13 +8,14 @@ from src.llm.client import LLMClient, get_llm_client
 @dataclass
 class ConfidenceResult:
     """Result of confidence scoring."""
+
     back_translation_score: float  # 0-1, similarity between original and back-translated query
     back_translated_question: str  # What the LLM thinks the SQL answers
-    hallucination_flag: bool       # True if back-translation diverges significantly
+    hallucination_flag: bool  # True if back-translation diverges significantly
     multi_query_agreement: float | None = None  # 0-1, result similarity between variants
-    multi_query_flag: bool | None = None        # True if variants disagree
-    variant_results: list | None = None         # Results from each variant
-    overall_confidence: float = 0.0                # Combined confidence score
+    multi_query_flag: bool | None = None  # True if variants disagree
+    variant_results: list | None = None  # Results from each variant
+    overall_confidence: float = 0.0  # Combined confidence score
 
 
 class ConfidenceScorer:
@@ -37,10 +39,12 @@ class ConfidenceScorer:
         try:
             # Suppress TF warnings
             import os
+
             os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "0")
             os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 
             from sentence_transformers import SentenceTransformer
+
             self._embedder = SentenceTransformer("all-MiniLM-L6-v2")
             self._has_embedder = True
         except Exception as e:
@@ -64,6 +68,7 @@ class ConfidenceScorer:
         embeddings = self._embedder.encode([text1, text2])
         # Cosine similarity
         import numpy as np
+
         sim = np.dot(embeddings[0], embeddings[1]) / (
             np.linalg.norm(embeddings[0]) * np.linalg.norm(embeddings[1])
         )
@@ -74,7 +79,7 @@ class ConfidenceScorer:
         if not self.llm or not self.llm.is_available:
             return "LLM unavailable for back-translation"
 
-        system_prompt = f"""You are a SQL expert. Given a SQL query and database schema, 
+        system_prompt = f"""You are a SQL expert. Given a SQL query and database schema,
 describe in natural language what question this SQL answers. Be specific and accurate.
 
 Database Schema:
@@ -95,9 +100,11 @@ Output ONLY the natural language question, no explanations."""
 
         return response or "Failed to generate back-translation"
 
-    def check_hallucination(self, original_query: str, sql: str, schema_context: str) -> tuple[float, str, bool]:
+    def check_hallucination(
+        self, original_query: str, sql: str, schema_context: str
+    ) -> tuple[float, str, bool]:
         """Check for hallucination via back-translation.
-        
+
         Returns:
             Tuple of (similarity_score, back_translated_question, hallucination_flag)
         """
@@ -107,10 +114,7 @@ Output ONLY the natural language question, no explanations."""
         return similarity, back_translated, hallucination_flag
 
     def generate_sql_variant(
-        self,
-        query: str,
-        schema_info: dict,
-        temperature: float = 0.3,
+        self, query: str, schema_info: dict, temperature: float = 0.3
     ) -> str | None:
         """Generate a SQL variant using the production parser with given temperature."""
         from evals.harness import build_schema_dict
@@ -126,14 +130,10 @@ Output ONLY the natural language question, no explanations."""
         return None
 
     def multi_query_validate(
-        self,
-        query: str,
-        schema_info: dict,
-        execution_engine,
-        num_variants: int = 2,
+        self, query: str, schema_info: dict, execution_engine, num_variants: int = 2
     ) -> tuple[float | None, bool | None, list]:
         """Generate multiple SQL variants and compare their results.
-        
+
         Returns:
             Tuple of (agreement_score, disagreement_flag, variant_results)
         """
@@ -152,15 +152,17 @@ Output ONLY the natural language question, no explanations."""
         results = []
         for temp, sql in variants:
             result = execution_engine.execute(sql)
-            results.append({
-                "temperature": temp,
-                "sql": sql,
-                "success": result.success,
-                "row_count": result.row_count,
-                "columns": result.columns,
-                "data": result.data if result.success else None,
-                "error": result.error,
-            })
+            results.append(
+                {
+                    "temperature": temp,
+                    "sql": sql,
+                    "success": result.success,
+                    "row_count": result.row_count,
+                    "columns": result.columns,
+                    "data": result.data if result.success else None,
+                    "error": result.error,
+                }
+            )
 
         # Compare successful results
         successful = [r for r in results if r["success"]]
@@ -173,7 +175,7 @@ Output ONLY the natural language question, no explanations."""
 
         # Agreement: 1.0 if all row counts equal and column sets equal
         row_agreement = 1.0 if len(set(row_counts)) == 1 else 0.0
-        col_agreement = 1.0 if len(set(frozenset(c) for c in column_sets)) == 1 else 0.0
+        col_agreement = 1.0 if len({frozenset(c) for c in column_sets}) == 1 else 0.0
 
         # For data comparison, sample first few rows
         data_agreement = 1.0
@@ -212,11 +214,10 @@ Output ONLY the natural language question, no explanations."""
         variant_results = None
 
         import random
+
         if force_multi_query or random.random() < self.multi_query_sample_rate:
             mq_agreement, mq_flag, variant_results = self.multi_query_validate(
-                query=original_query,
-                schema_info=schema_info,
-                execution_engine=execution_engine,
+                query=original_query, schema_info=schema_info, execution_engine=execution_engine
             )
 
         # Overall confidence: weighted combination
@@ -257,11 +258,7 @@ class _EvalLLMClientAdapter:
         return self.llm_client.is_available
 
     def structured_output(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        response_schema: dict,
-        temperature: float = 0.2,
+        self, system_prompt: str, user_prompt: str, response_schema: dict, temperature: float = 0.2
     ) -> dict | None:
         result = self.llm_client.structured_output(
             system_prompt, user_prompt, response_schema, temperature

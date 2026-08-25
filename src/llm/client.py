@@ -1,4 +1,5 @@
 """LLM Client wrapper for QueryMind AI - Supports Ollama and OpenAI."""
+
 import json
 import os
 import re
@@ -10,7 +11,7 @@ import httpx
 class LLMClient:
     """
     Unified LLM client supporting NVIDIA Nemotron, Gemini, Ollama (local) and OpenAI (cloud).
-    
+
     Auto-detects available provider based on configuration.
     """
 
@@ -45,7 +46,7 @@ class LLMClient:
             "latency_ms": 0,
             "cost_usd": 0.0,
             "provider": self._actual_provider,
-            "model": self.model
+            "model": self.model,
         }
 
     def _detect_provider(self) -> str:
@@ -78,6 +79,7 @@ class LLMClient:
     def _check_ollama(self) -> bool:
         """Check if Ollama is available with a strict low timeout."""
         import httpx
+
         try:
             # Sub-second timeout prevents boot hang on resource-starved systems
             response = httpx.get("http://localhost:11434/api/tags", timeout=0.5)
@@ -159,13 +161,11 @@ class LLMClient:
         return bool(self.api_key)
 
     def chat(
-        self,
-        messages: list[dict[str, str]],
-        temperature: float = 0.3,
-        max_tokens: int = 2000,
+        self, messages: list[dict[str, str]], temperature: float = 0.3, max_tokens: int = 2000
     ) -> str | None:
         """Send a chat completion request with auto-fallback and retry on 500 errors."""
         import time
+
         if not self.is_available:
             return None
 
@@ -189,8 +189,10 @@ class LLMClient:
                 return result
             except httpx.HTTPStatusError as e:
                 if e.response.status_code in (429, 503) and attempt < 4:
-                    wait = min(2 ** attempt * 5, 60)  # 5s, 10s, 20s, 40s, max 60s
-                    print(f"{self._actual_provider.upper()} {e.response.status_code} (attempt {attempt+1}/5), waiting {wait}s...")
+                    wait = min(2**attempt * 5, 60)  # 5s, 10s, 20s, 40s, max 60s
+                    print(
+                        f"{self._actual_provider.upper()} {e.response.status_code} (attempt {attempt + 1}/5), waiting {wait}s..."
+                    )
                     time.sleep(wait)
                     continue
                 print(f"{self._actual_provider.upper()} failed, falling back: {e}")
@@ -202,10 +204,7 @@ class LLMClient:
         return None
 
     def _openai_chat(
-        self,
-        messages: list[dict[str, str]],
-        temperature: float,
-        max_tokens: int,
+        self, messages: list[dict[str, str]], temperature: float, max_tokens: int
     ) -> str | None:
         """Ollama chat completion."""
         # Convert messages to Ollama format
@@ -231,10 +230,7 @@ class LLMClient:
             "stream": False,
         }
 
-        response = self.client.post(
-            f"{self.base_url}/api/chat",
-            json=payload,
-        )
+        response = self.client.post(f"{self.base_url}/api/chat", json=payload)
         response.raise_for_status()
         data = response.json()
 
@@ -242,20 +238,19 @@ class LLMClient:
         # Note: Ollama usually provides 'prompt_eval_count' and 'eval_count'
         p_tokens = data.get("prompt_eval_count", len(str(messages)) // 4)
         c_tokens = data.get("eval_count", len(data["message"]["content"]) // 4)
-        self.last_usage.update({
-            "prompt_tokens": p_tokens,
-            "completion_tokens": c_tokens,
-            "total_tokens": p_tokens + c_tokens,
-            "cost_usd": 0.0  # Local models are free!
-        })
+        self.last_usage.update(
+            {
+                "prompt_tokens": p_tokens,
+                "completion_tokens": c_tokens,
+                "total_tokens": p_tokens + c_tokens,
+                "cost_usd": 0.0,  # Local models are free!
+            }
+        )
 
         return data["message"]["content"]
 
     def _openai_chat(
-        self,
-        messages: list[dict[str, str]],
-        temperature: float,
-        max_tokens: int,
+        self, messages: list[dict[str, str]], temperature: float, max_tokens: int
     ) -> str | None:
         """OpenAI chat completion."""
         payload = {
@@ -265,10 +260,7 @@ class LLMClient:
             "max_tokens": max_tokens,
         }
 
-        response = self.client.post(
-            f"{self.base_url}/chat/completions",
-            json=payload,
-        )
+        response = self.client.post(f"{self.base_url}/chat/completions", json=payload)
         response.raise_for_status()
         data = response.json()
 
@@ -280,20 +272,19 @@ class LLMClient:
         # Heuristic cost for gpt-4o-mini ($0.15 / 1M input, $0.60 / 1M output)
         cost = (p_tokens * 0.15 / 1_000_000) + (c_tokens * 0.60 / 1_000_000)
 
-        self.last_usage.update({
-            "prompt_tokens": p_tokens,
-            "completion_tokens": c_tokens,
-            "total_tokens": p_tokens + c_tokens,
-            "cost_usd": round(cost, 6)
-        })
+        self.last_usage.update(
+            {
+                "prompt_tokens": p_tokens,
+                "completion_tokens": c_tokens,
+                "total_tokens": p_tokens + c_tokens,
+                "cost_usd": round(cost, 6),
+            }
+        )
 
         return data["choices"][0]["message"]["content"]
 
     def _nvidia_chat(
-        self,
-        messages: list[dict[str, str]],
-        temperature: float,
-        max_tokens: int,
+        self, messages: list[dict[str, str]], temperature: float, max_tokens: int
     ) -> str | None:
         """NVIDIA Nemotron 3 Ultra chat completion."""
         # NVIDIA uses OpenAI-compatible API
@@ -305,10 +296,7 @@ class LLMClient:
             "stream": False,
         }
 
-        response = self.client.post(
-            f"{self.base_url}/chat/completions",
-            json=payload,
-        )
+        response = self.client.post(f"{self.base_url}/chat/completions", json=payload)
         response.raise_for_status()
         data = response.json()
 
@@ -322,14 +310,16 @@ class LLMClient:
         # Heuristic cost for Nemotron (similar to GPT-4o-mini scale)
         cost = (p_tokens * 0.15 / 1_000_000) + (c_tokens * 0.60 / 1_000_000)
 
-        self.last_usage.update({
-            "provider": "nvidia",
-            "model": self.model,
-            "prompt_tokens": p_tokens,
-            "completion_tokens": c_tokens,
-            "total_tokens": p_tokens + c_tokens,
-            "cost_usd": round(cost, 6),
-        })
+        self.last_usage.update(
+            {
+                "provider": "nvidia",
+                "model": self.model,
+                "prompt_tokens": p_tokens,
+                "completion_tokens": c_tokens,
+                "total_tokens": p_tokens + c_tokens,
+                "cost_usd": round(cost, 6),
+            }
+        )
 
         return content
 
@@ -367,10 +357,7 @@ class LLMClient:
             return None
 
     def _nvidia_structured_output(
-        self,
-        messages: list[dict[str, str]],
-        response_schema: dict[str, Any],
-        temperature: float,
+        self, messages: list[dict[str, str]], response_schema: dict[str, Any], temperature: float
     ) -> dict[str, Any] | None:
         """NVIDIA structured output using JSON mode."""
         payload = {
@@ -380,18 +367,12 @@ class LLMClient:
             "max_tokens": 2000,
             "response_format": {
                 "type": "json_schema",
-                "json_schema": {
-                    "name": "query_intent",
-                    "schema": response_schema,
-                },
+                "json_schema": {"name": "query_intent", "schema": response_schema},
             },
         }
 
         try:
-            response = self.client.post(
-                f"{self.base_url}/chat/completions",
-                json=payload,
-            )
+            response = self.client.post(f"{self.base_url}/chat/completions", json=payload)
             response.raise_for_status()
             data = response.json()
             content = data["choices"][0]["message"]["content"]
@@ -404,14 +385,16 @@ class LLMClient:
             # Heuristic pricing for NVIDIA Nemotron 3 Ultra (similar to GPT-4o-mini scale)
             cost = (p_tokens * 0.15 / 1_000_000) + (c_tokens * 0.60 / 1_000_000)
 
-            self.last_usage.update({
-                "provider": "nvidia",
-                "model": self.model,
-                "prompt_tokens": p_tokens,
-                "completion_tokens": c_tokens,
-                "total_tokens": p_tokens + c_tokens,
-                "cost_usd": round(cost, 6),
-            })
+            self.last_usage.update(
+                {
+                    "provider": "nvidia",
+                    "model": self.model,
+                    "prompt_tokens": p_tokens,
+                    "completion_tokens": c_tokens,
+                    "total_tokens": p_tokens + c_tokens,
+                    "cost_usd": round(cost, 6),
+                }
+            )
 
             return json.loads(content)
         except json.JSONDecodeError:
@@ -421,10 +404,7 @@ class LLMClient:
             return None
 
     def _gemini_structured_output(
-        self,
-        messages: list[dict[str, str]],
-        response_schema: dict[str, Any],
-        temperature: float,
+        self, messages: list[dict[str, str]], response_schema: dict[str, Any], temperature: float
     ) -> dict[str, Any] | None:
         """Gemini structured output."""
         # Convert messages to Gemini format
@@ -439,7 +419,9 @@ class LLMClient:
 
         # Prepend system prompt to first user message
         if system_prompt and gemini_messages and gemini_messages[0]["role"] == "user":
-            gemini_messages[0]["parts"][0]["text"] = f"{system_prompt}\n\n{gemini_messages[0]['parts'][0]['text']}"
+            gemini_messages[0]["parts"][0]["text"] = (
+                f"{system_prompt}\n\n{gemini_messages[0]['parts'][0]['text']}"
+            )
 
         payload = {
             "contents": gemini_messages,
@@ -467,14 +449,16 @@ class LLMClient:
 
             cost = (p_tokens * 0.075 / 1_000_000) + (c_tokens * 0.30 / 1_000_000)
 
-            self.last_usage.update({
-                "provider": "gemini",
-                "model": self.model,
-                "prompt_tokens": p_tokens,
-                "completion_tokens": c_tokens,
-                "total_tokens": p_tokens + c_tokens,
-                "cost_usd": round(cost, 6),
-            })
+            self.last_usage.update(
+                {
+                    "provider": "gemini",
+                    "model": self.model,
+                    "prompt_tokens": p_tokens,
+                    "completion_tokens": c_tokens,
+                    "total_tokens": p_tokens + c_tokens,
+                    "cost_usd": round(cost, 6),
+                }
+            )
 
             return json.loads(content)
         except json.JSONDecodeError:
@@ -484,10 +468,7 @@ class LLMClient:
             return None
 
     def _ollama_structured_output(
-        self,
-        messages: list[dict[str, str]],
-        response_schema: dict[str, Any],
-        temperature: float,
+        self, messages: list[dict[str, str]], response_schema: dict[str, Any], temperature: float
     ) -> dict[str, Any] | None:
         """Ollama structured output - parse from text."""
         content = self.chat(messages, temperature=temperature, max_tokens=1500)
@@ -499,10 +480,7 @@ class LLMClient:
         return self._extract_json(content)
 
     def _openai_structured_output(
-        self,
-        messages: list[dict[str, str]],
-        response_schema: dict[str, Any],
-        temperature: float,
+        self, messages: list[dict[str, str]], response_schema: dict[str, Any], temperature: float
     ) -> dict[str, Any] | None:
         """OpenAI structured output using JSON mode."""
         payload = {
@@ -512,18 +490,12 @@ class LLMClient:
             "max_tokens": 2000,
             "response_format": {
                 "type": "json_schema",
-                "json_schema": {
-                    "name": "query_intent",
-                    "schema": response_schema,
-                },
+                "json_schema": {"name": "query_intent", "schema": response_schema},
             },
         }
 
         try:
-            response = self.client.post(
-                f"{self.base_url}/chat/completions",
-                json=payload,
-            )
+            response = self.client.post(f"{self.base_url}/chat/completions", json=payload)
             response.raise_for_status()
             data = response.json()
             content = data["choices"][0]["message"]["content"]
@@ -535,14 +507,16 @@ class LLMClient:
 
             cost = (p_tokens * 0.15 / 1_000_000) + (c_tokens * 0.60 / 1_000_000)
 
-            self.last_usage.update({
-                "provider": "openai",
-                "model": self.model,
-                "prompt_tokens": p_tokens,
-                "completion_tokens": c_tokens,
-                "total_tokens": p_tokens + c_tokens,
-                "cost_usd": round(cost, 6),
-            })
+            self.last_usage.update(
+                {
+                    "provider": "openai",
+                    "model": self.model,
+                    "prompt_tokens": p_tokens,
+                    "completion_tokens": c_tokens,
+                    "total_tokens": p_tokens + c_tokens,
+                    "cost_usd": round(cost, 6),
+                }
+            )
 
             return json.loads(content)
         except json.JSONDecodeError:
@@ -581,11 +555,7 @@ class LLMClient:
         return None
 
     def generate_insights(
-        self,
-        query: str,
-        sql: str,
-        data: dict[str, Any],
-        context: str,
+        self, query: str, sql: str, data: dict[str, Any], context: str
     ) -> str | None:
         """Generate human-like insights from query results."""
         if not self.is_available:
@@ -641,7 +611,10 @@ class IntentParserLLM:
     SCHEMA = {
         "type": "object",
         "properties": {
-            "metric": {"type": "string", "description": "The metric to query (e.g., revenue, sales, count)"},
+            "metric": {
+                "type": "string",
+                "description": "The metric to query (e.g., revenue, sales, count)",
+            },
             "aggregation": {"type": "string", "enum": ["sum", "count", "avg", "min", "max"]},
             "group_by": {"type": "string", "nullable": True},
             "filters": {
@@ -653,8 +626,15 @@ class IntentParserLLM:
                 },
             },
             "limit": {"type": "integer"},
-            "chart": {"type": "string", "enum": ["bar", "line", "pie", "area"], "description": "The absolute most optimal visualization chart type for formatting the provided sql dimensions."},
-            "sql_query": {"type": "string", "description": "The exact valid raw SQLite query. Join tables strictly based on the relationships in the schema context. Do not use alias names for columns that do not exist."},
+            "chart": {
+                "type": "string",
+                "enum": ["bar", "line", "pie", "area"],
+                "description": "The absolute most optimal visualization chart type for formatting the provided sql dimensions.",
+            },
+            "sql_query": {
+                "type": "string",
+                "description": "The exact valid raw SQLite query. Join tables strictly based on the relationships in the schema context. Do not use alias names for columns that do not exist.",
+            },
         },
         "required": ["metric", "aggregation", "sql_query"],
     }
@@ -662,7 +642,9 @@ class IntentParserLLM:
     def __init__(self, llm_client: LLMClient | None = None):
         self.llm = llm_client
 
-    def parse(self, query: str, schema_info: dict, previous_intent: dict | None = None) -> dict | None:
+    def parse(
+        self, query: str, schema_info: dict, previous_intent: dict | None = None
+    ) -> dict | None:
         """Parse complex query using LLM with Standalone fallback."""
         if not self.llm or not self.llm.is_available:
             return self.parse_standalone(query, schema_info)
@@ -693,12 +675,12 @@ Output JSON matching this schema:
 
 If this is a refinement of a previous query, merge with previous intent.{refinement_context}"""
 
-        user_prompt = f"Parse this query and generate SQL using ONLY the tables listed above: {query}"
+        user_prompt = (
+            f"Parse this query and generate SQL using ONLY the tables listed above: {query}"
+        )
 
         result = self.llm.structured_output(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            response_schema=self.SCHEMA,
+            system_prompt=system_prompt, user_prompt=user_prompt, response_schema=self.SCHEMA
         )
 
         # Validate: LLM sometimes echoes the schema template instead of filling it in.
@@ -726,15 +708,26 @@ If this is a refinement of a previous query, merge with previous intent.{refinem
         table_names = list(tables.keys())
 
         if not table_names:
-            return {"metric": "records", "aggregation": "count", "group_by": None,
-                    "chart": "bar", "sql_query": "SELECT 'No tables found' AS error"}
+            return {
+                "metric": "records",
+                "aggregation": "count",
+                "group_by": None,
+                "chart": "bar",
+                "sql_query": "SELECT 'No tables found' AS error",
+            }
 
         # Meta-queries about the database structure itself
-        if any(w in q for w in ["how many table", "list table", "show table", "what table", "all table"]):
+        if any(
+            w in q
+            for w in ["how many table", "list table", "show table", "what table", "all table"]
+        ):
             names_list = ", ".join(f"'{t}'" for t in table_names)
             return {
-                "metric": "tables", "aggregation": "count", "group_by": None, "chart": "bar",
-                "sql_query": f"SELECT name FROM sqlite_master WHERE type='table' AND name IN ({names_list}) ORDER BY name"
+                "metric": "tables",
+                "aggregation": "count",
+                "group_by": None,
+                "chart": "bar",
+                "sql_query": f"SELECT name FROM sqlite_master WHERE type='table' AND name IN ({names_list}) ORDER BY name",
             }
 
         # Try to find the best matching table from the query keywords
@@ -764,7 +757,13 @@ If this is a refinement of a previous query, merge with previous intent.{refinem
                     limit = int(word)
                     break
             intent_sql = f'SELECT * FROM "{matched_table}" LIMIT {limit}'
-            return {"metric": "records", "aggregation": "count", "group_by": None, "chart": "bar", "sql_query": intent_sql}
+            return {
+                "metric": "records",
+                "aggregation": "count",
+                "group_by": None,
+                "chart": "bar",
+                "sql_query": intent_sql,
+            }
 
         # COUNT queries
         if any(w in q for w in ["count", "how many", "total number", "number of"]):
@@ -775,17 +774,41 @@ If this is a refinement of a previous query, merge with previous intent.{refinem
             if not matched_table:
                 matched_table = table_names[0]
             intent_sql = f'SELECT COUNT(*) as count FROM "{matched_table}"'
-            return {"metric": "count", "aggregation": "count", "group_by": None, "chart": "bar", "sql_query": intent_sql}
+            return {
+                "metric": "count",
+                "aggregation": "count",
+                "group_by": None,
+                "chart": "bar",
+                "sql_query": intent_sql,
+            }
 
         # Aggregation queries (sum/avg/revenue/total)
         if any(w in q for w in ["revenue", "sale", "total", "sum", "average", "avg"]):
-            matched_table = pick_table(["invoice", "order", "sale", "transaction", "payment"]) or table_names[0]
+            matched_table = (
+                pick_table(["invoice", "order", "sale", "transaction", "payment"]) or table_names[0]
+            )
             tinfo = tables.get(matched_table, {})
             cols = list(tinfo.get("columns", {}).keys())
             # Find a numeric column to sum
-            numeric_col = next((c for c in cols if any(k in c.lower() for k in ["total", "amount", "price", "revenue", "cost", "salary", "value"])), cols[0] if cols else "*")
+            numeric_col = next(
+                (
+                    c
+                    for c in cols
+                    if any(
+                        k in c.lower()
+                        for k in ["total", "amount", "price", "revenue", "cost", "salary", "value"]
+                    )
+                ),
+                cols[0] if cols else "*",
+            )
             intent_sql = f'SELECT SUM("{numeric_col}") as total FROM "{matched_table}"'
-            return {"metric": numeric_col, "aggregation": "sum", "group_by": None, "chart": "bar", "sql_query": intent_sql}
+            return {
+                "metric": numeric_col,
+                "aggregation": "sum",
+                "group_by": None,
+                "chart": "bar",
+                "sql_query": intent_sql,
+            }
 
         # Default: show first 10 rows from most likely table
         for t in table_names:
@@ -795,8 +818,11 @@ If this is a refinement of a previous query, merge with previous intent.{refinem
         if not matched_table:
             matched_table = table_names[0]
         return {
-            "metric": "records", "aggregation": "count", "group_by": None, "chart": "bar",
-            "sql_query": f'SELECT * FROM "{matched_table}" LIMIT 10'
+            "metric": "records",
+            "aggregation": "count",
+            "group_by": None,
+            "chart": "bar",
+            "sql_query": f'SELECT * FROM "{matched_table}" LIMIT 10',
         }
 
     def generate_dynamic_dashboard(self, schema_info: dict) -> dict | None:
@@ -820,12 +846,15 @@ Return the result strictly as JSON."""
                     "items": {
                         "type": "object",
                         "properties": {
-                            "label": {"type": "string", "description": "Human readable KPI label (e.g., Total Revenue)"},
+                            "label": {
+                                "type": "string",
+                                "description": "Human readable KPI label (e.g., Total Revenue)",
+                            },
                             "sql": {"type": "string", "description": "Single-scalar SQLite query"},
-                            "format": {"type": "string", "enum": ["number", "currency"]}
+                            "format": {"type": "string", "enum": ["number", "currency"]},
                         },
-                        "required": ["label", "sql", "format"]
-                    }
+                        "required": ["label", "sql", "format"],
+                    },
                 },
                 "charts": {
                     "type": "array",
@@ -833,21 +862,28 @@ Return the result strictly as JSON."""
                         "type": "object",
                         "properties": {
                             "label": {"type": "string", "description": "Visualization title"},
-                            "sql": {"type": "string", "description": "SQLite query returning exactly 2 columns to plot."},
-                            "type": {"type": "string", "enum": ["bar", "line", "pie", "area"], "description": "Best chart type for this data"}
+                            "sql": {
+                                "type": "string",
+                                "description": "SQLite query returning exactly 2 columns to plot.",
+                            },
+                            "type": {
+                                "type": "string",
+                                "enum": ["bar", "line", "pie", "area"],
+                                "description": "Best chart type for this data",
+                            },
                         },
-                        "required": ["label", "sql", "type"]
-                    }
-                }
+                        "required": ["label", "sql", "type"],
+                    },
+                },
             },
-            "required": ["kpis", "charts"]
+            "required": ["kpis", "charts"],
         }
 
         result = self.llm.structured_output(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             response_schema=json_schema,
-            temperature=0.3
+            temperature=0.3,
         )
 
         if not result:
@@ -861,13 +897,14 @@ Return the result strictly as JSON."""
         and builds KPI + chart queries dynamically.
         """
         tables = schema_info.get("tables", {})
-        relationships = schema_info.get("relationships", [])
+        schema_info.get("relationships", [])
 
         # Helper: find columns by SQLite type hint
         def cols_of_type(table_name, type_keywords):
             info = tables.get(table_name, {})
             return [
-                col for col, ctype in info.get("columns", {}).items()
+                col
+                for col, ctype in info.get("columns", {}).items()
                 if any(kw in str(ctype).upper() for kw in type_keywords)
             ]
 
@@ -886,56 +923,93 @@ Return the result strictly as JSON."""
             cols = table_info.get("columns", {})
 
             # ── KPIs: aggregate numeric columns ──────────────────────────
-            numeric_cols = [c for c, t in cols.items()
-                            if any(kw in str(t).upper() for kw in ["REAL", "FLOAT", "DOUBLE", "NUMERIC", "DECIMAL", "INT"])]
+            numeric_cols = [
+                c
+                for c, t in cols.items()
+                if any(
+                    kw in str(t).upper()
+                    for kw in ["REAL", "FLOAT", "DOUBLE", "NUMERIC", "DECIMAL", "INT"]
+                )
+            ]
             for col in numeric_cols[:2]:  # at most 2 per table
-                fmt = "currency" if any(kw in col.lower() for kw in ["amount", "price", "revenue", "total", "cost"]) else "number"
-                kpis.append({
-                    "label": f"Total {col.replace('_', ' ').title()} ({table_name})",
-                    "sql": f"SELECT SUM({col}) FROM {table_name}",
-                    "format": fmt
-                })
+                fmt = (
+                    "currency"
+                    if any(
+                        kw in col.lower() for kw in ["amount", "price", "revenue", "total", "cost"]
+                    )
+                    else "number"
+                )
+                kpis.append(
+                    {
+                        "label": f"Total {col.replace('_', ' ').title()} ({table_name})",
+                        "sql": f"SELECT SUM({col}) FROM {table_name}",
+                        "format": fmt,
+                    }
+                )
 
             # Also add a COUNT KPI
-            kpis.append({
-                "label": f"Total {table_name.title()} Records",
-                "sql": f"SELECT COUNT(*) FROM {table_name}",
-                "format": "number"
-            })
+            kpis.append(
+                {
+                    "label": f"Total {table_name.title()} Records",
+                    "sql": f"SELECT COUNT(*) FROM {table_name}",
+                    "format": "number",
+                }
+            )
 
             # ── Charts: time-series on date columns ───────────────────────
-            date_col = any_col(table_name, ["date", "created_at", "timestamp", "order_date", "created"])
+            date_col = any_col(
+                table_name, ["date", "created_at", "timestamp", "order_date", "created"]
+            )
             if date_col and numeric_cols:
                 val_col = numeric_cols[0]
-                charts.append({
-                    "label": f"{val_col.replace('_', ' ').title()} Over Time ({table_name})",
-                    "sql": f"SELECT strftime('%Y-%m', {date_col}) as month, SUM({val_col}) as value FROM {table_name} GROUP BY month ORDER BY month",
-                    "type": "line"
-                })
+                charts.append(
+                    {
+                        "label": f"{val_col.replace('_', ' ').title()} Over Time ({table_name})",
+                        "sql": f"SELECT strftime('%Y-%m', {date_col}) as month, SUM({val_col}) as value FROM {table_name} GROUP BY month ORDER BY month",
+                        "type": "line",
+                    }
+                )
 
             # ── Charts: distribution on categorical columns ────────────────
-            cat_cols = [c for c, t in cols.items()
-                        if any(kw in str(t).upper() for kw in ["TEXT", "VARCHAR", "CHAR"])
-                        and c not in ("id", "user_id", "order_id", "product_id", "description", "email", "password", "image_url")]
+            cat_cols = [
+                c
+                for c, t in cols.items()
+                if any(kw in str(t).upper() for kw in ["TEXT", "VARCHAR", "CHAR"])
+                and c
+                not in (
+                    "id",
+                    "user_id",
+                    "order_id",
+                    "product_id",
+                    "description",
+                    "email",
+                    "password",
+                    "image_url",
+                )
+            ]
             if cat_cols:
                 cat_col = cat_cols[0]
                 count_metric = numeric_cols[0] if numeric_cols else None
                 if count_metric:
-                    charts.append({
-                        "label": f"{count_metric.replace('_', ' ').title()} by {cat_col.replace('_', ' ').title()}",
-                        "sql": f"SELECT {cat_col}, SUM({count_metric}) as value FROM {table_name} GROUP BY {cat_col} ORDER BY value DESC LIMIT 10",
-                        "type": "bar"
-                    })
+                    charts.append(
+                        {
+                            "label": f"{count_metric.replace('_', ' ').title()} by {cat_col.replace('_', ' ').title()}",
+                            "sql": f"SELECT {cat_col}, SUM({count_metric}) as value FROM {table_name} GROUP BY {cat_col} ORDER BY value DESC LIMIT 10",
+                            "type": "bar",
+                        }
+                    )
                 else:
-                    charts.append({
-                        "label": f"Records by {cat_col.replace('_', ' ').title()}",
-                        "sql": f"SELECT {cat_col}, COUNT(*) as count FROM {table_name} GROUP BY {cat_col} ORDER BY count DESC LIMIT 10",
-                        "type": "pie"
-                    })
+                    charts.append(
+                        {
+                            "label": f"Records by {cat_col.replace('_', ' ').title()}",
+                            "sql": f"SELECT {cat_col}, COUNT(*) as count FROM {table_name} GROUP BY {cat_col} ORDER BY count DESC LIMIT 10",
+                            "type": "pie",
+                        }
+                    )
 
         return {
-            "kpis": kpis[:5],          # Cap at 5 KPIs
-            "charts": charts[:3]        # Cap at 3 charts
+            "kpis": kpis[:5],  # Cap at 5 KPIs
+            "charts": charts[:3],  # Cap at 3 charts
         }
 
     def _build_schema_context(self, schema_info: dict) -> str:
@@ -966,17 +1040,12 @@ def get_llm_client() -> LLMClient | None:
     if _llm_client is None:
         # Explicitly use nvidia provider if NVIDIA_API_KEY is set
         provider = "nvidia" if os.environ.get("NVIDIA_API_KEY") else "auto"
-        _llm_client = LLMClient(
-            api_key=os.environ.get("NVIDIA_API_KEY"),
-            provider=provider,
-        )
+        _llm_client = LLMClient(api_key=os.environ.get("NVIDIA_API_KEY"), provider=provider)
     return _llm_client
 
 
 def init_llm(
-    api_key: str | None = None,
-    model: str | None = None,
-    provider: str = "auto",
+    api_key: str | None = None, model: str | None = None, provider: str = "auto"
 ) -> LLMClient:
     """Initialize LLM client."""
     global _llm_client

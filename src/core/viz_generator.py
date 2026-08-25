@@ -1,12 +1,14 @@
 """Visualization Generator - Auto-generates charts from query results (Lite Edition)."""
+
 from typing import Any
 
 
 class VizGenerator:
     """Generates visualizations from query results using native Python structures."""
 
-    def generate_chart(self, result_data: list[dict[str, Any]], intent: dict[str, Any],
-                    chart_type: str = "auto") -> Any:
+    def generate_chart(
+        self, result_data: list[dict[str, Any]], intent: dict[str, Any], chart_type: str = "auto"
+    ) -> Any:
         """
         Generate a chart based on query result records.
         """
@@ -36,7 +38,9 @@ class VizGenerator:
         else:
             return self._bar_chart(result_data, columns, intent)
 
-    def _detect_chart_type(self, data: list[dict], columns: list[str], intent: dict[str, Any]) -> str:
+    def _detect_chart_type(
+        self, data: list[dict], columns: list[str], intent: dict[str, Any]
+    ) -> str:
         """Auto-detect best chart type using native logic."""
         group_by = intent.get("group_by")
 
@@ -50,11 +54,16 @@ class VizGenerator:
     def _line_chart(self, data: list[dict], columns: list[str], intent: dict[str, Any]) -> Any:
         """Generate a line chart."""
         import plotly.express as px
-        x_col = self._find_column(columns, ["month", "date", "time", "year"])
-        y_col = self._find_column(columns, ["amount", "revenue", "sales", "total", "count", "order_count"])
 
-        if x_col is None: x_col = columns[0]
-        if y_col is None: y_col = columns[-1]
+        x_col = self._find_column(columns, ["month", "date", "time", "year"])
+        y_col = self._find_column(
+            columns, ["amount", "revenue", "sales", "total", "count", "order_count"]
+        )
+
+        if x_col is None:
+            x_col = columns[0]
+        if y_col is None:
+            y_col = columns[-1]
 
         # px supports list of dicts directly
         fig = px.line(data, x=x_col, y=y_col, markers=True)
@@ -70,24 +79,35 @@ class VizGenerator:
     def _bar_chart(self, data: list[dict], columns: list[str], intent: dict[str, Any]) -> Any:
         """Generate a bar chart."""
         import plotly.express as px
-        x_col = self._find_column(columns, ["name", "category", "city", "product"])
-        if x_col is None: x_col = columns[0]
 
-        y_col = self._find_column(columns, ["amount", "revenue", "sales", "total", "count", "order_count"])
-        if y_col is None: y_col = columns[-1]
+        x_col = self._find_column(columns, ["name", "category", "city", "product"])
+        if x_col is None:
+            x_col = columns[0]
+
+        y_col = self._find_column(
+            columns, ["amount", "revenue", "sales", "total", "count", "order_count"]
+        )
+        if y_col is None:
+            y_col = columns[-1]
 
         # Handle coloring categories separately
         has_many = len(data) > 15
         color_val = None if has_many else x_col
 
-        fig = px.bar(data, x=x_col, y=y_col, color=color_val, color_discrete_sequence=px.colors.qualitative.Pastel)
+        fig = px.bar(
+            data,
+            x=x_col,
+            y=y_col,
+            color=color_val,
+            color_discrete_sequence=px.colors.qualitative.Pastel,
+        )
 
         fig.update_layout(
             title=self._get_chart_title(intent),
             xaxis_title=str(x_col).title(),
             yaxis_title=str(y_col).title(),
             template="plotly_white",
-            showlegend=False if not color_val else True
+            showlegend=False if not color_val else True,
         )
 
         if len(data) > 5:
@@ -98,11 +118,14 @@ class VizGenerator:
     def _pie_chart(self, data: list[dict], columns: list[str], intent: dict[str, Any]) -> Any:
         """Generate a pie chart."""
         import plotly.express as px
+
         label_col = self._find_column(columns, ["name", "category", "city"])
-        if label_col is None: label_col = columns[0]
+        if label_col is None:
+            label_col = columns[0]
 
         value_col = self._find_column(columns, ["amount", "revenue", "sales", "total", "count"])
-        if value_col is None: value_col = columns[-1]
+        if value_col is None:
+            value_col = columns[-1]
 
         fig = px.pie(data, values=value_col, names=label_col, title=self._get_chart_title(intent))
         fig.update_traces(textposition="inside", textinfo="percent+label")
@@ -111,18 +134,19 @@ class VizGenerator:
     def _table_chart(self, data: list[dict], columns: list[str]) -> Any:
         """Generate a table view."""
         import plotly.graph_objects as go
-        fig = go.Figure(data=[go.Table(
-            header=dict(
-                values=columns,
-                fill_color="lightblue",
-                align="left"
-            ),
-            cells=dict(
-                values=[[row.get(col) for row in data] for col in columns],
-                fill_color="white",
-                align="left"
-            )
-        )])
+
+        fig = go.Figure(
+            data=[
+                go.Table(
+                    header={"values": columns, "fill_color": "lightblue", "align": "left"},
+                    cells={
+                        "values": [[row.get(col) for row in data] for col in columns],
+                        "fill_color": "white",
+                        "align": "left",
+                    },
+                )
+            ]
+        )
         return fig
 
     def _find_column(self, columns: list[str], candidates: list[str]) -> str | None:

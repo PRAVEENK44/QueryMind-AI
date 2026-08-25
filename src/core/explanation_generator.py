@@ -1,21 +1,27 @@
 """Explanation Generator - Generates natural language explanations (Lite Edition)."""
+
 from typing import Any
 
 
 class ExplanationGenerator:
     """Generates explanations for query results using native Python structures."""
 
-    def generate(self, intent: dict[str, Any], sql_query: str,
-                result_data: list[dict[str, Any]], is_refinement: bool = False) -> str:
+    def generate(
+        self,
+        intent: dict[str, Any],
+        sql_query: str,
+        result_data: list[dict[str, Any]],
+        is_refinement: bool = False,
+    ) -> str:
         """
         Generate explanation for query and results.
-        
+
         Args:
             intent: Query intent dictionary
             sql_query: Generated SQL query
             result_data: Query results as a list of dictionaries
             is_refinement: Whether this is a refined query
-            
+
         Returns:
             Natural language explanation
         """
@@ -81,7 +87,7 @@ class ExplanationGenerator:
         # Filters
         filters = intent.get("filters", {})
         if isinstance(filters, object) and hasattr(filters, "dict"):
-            filters = filters.dict() # Handle Pydantic model
+            filters = filters.dict()  # Handle Pydantic model
 
         filter_parts = []
         if filters.get("city"):
@@ -115,7 +121,11 @@ class ExplanationGenerator:
 
         if metric_col:
             # Native Python sum
-            total_value = sum((row.get(metric_col) or 0) for row in result_data if isinstance(row.get(metric_col), (int, float)))
+            total_value = sum(
+                (row.get(metric_col) or 0)
+                for row in result_data
+                if isinstance(row.get(metric_col), (int, float))
+            )
 
             if "amount" in metric_col or "revenue" in metric_col:
                 explanation = f"Found {row_count} results with a total of ₹{total_value:,.2f}."

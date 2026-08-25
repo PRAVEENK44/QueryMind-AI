@@ -1,4 +1,5 @@
 """Hybrid Intent Parser - Rule-based with LLM fallback."""
+
 from typing import Any
 
 from src.core.intent_parser import IntentParser as RuleBasedParser
@@ -8,7 +9,7 @@ from src.llm.client import IntentParserLLM, get_llm_client
 class IntentParser:
     """
     Hybrid intent parser combining rule-based and LLM approaches.
-    
+
     Flow:
     1. Try rule-based parser first (fast, deterministic)
     2. If confidence is low or query is complex, use LLM
@@ -45,19 +46,16 @@ class IntentParser:
         return self._llm_parser
 
     def parse(
-        self,
-        query: str,
-        previous_intent: Any | None = None,
-        schema_info: dict | None = None,
+        self, query: str, previous_intent: Any | None = None, schema_info: dict | None = None
     ) -> Any:
         """
         Parse query with hybrid approach.
-        
+
         Args:
             query: Natural language query
             previous_intent: Previous query intent for refinement
             schema_info: Database schema info (for LLM)
-            
+
         Returns:
             QueryIntent object
         """
@@ -89,10 +87,7 @@ class IntentParser:
         return False
 
     def _parse_with_llm(
-        self,
-        query: str,
-        schema_info: dict | None,
-        previous_intent: Any | None,
+        self, query: str, schema_info: dict | None, previous_intent: Any | None
     ) -> dict | None:
         """Parse using LLM when rule-based fails."""
         if not self.llm_parser or not schema_info:

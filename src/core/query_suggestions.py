@@ -1,11 +1,12 @@
 """Query Suggestions - Suggest follow-up queries to users."""
+
 from typing import Any
 
 
 class QuerySuggester:
     """
     Generate contextual query suggestions after results are shown.
-    
+
     Suggests based on:
     - Current query type
     - Available filters
@@ -51,20 +52,15 @@ class QuerySuggester:
             ],
         }
 
-    def suggest(
-        self,
-        query: str,
-        intent: dict[str, Any],
-        result: Any,
-    ) -> list[dict[str, str]]:
+    def suggest(self, query: str, intent: dict[str, Any], result: Any) -> list[dict[str, str]]:
         """
         Generate suggestions based on current query.
-        
+
         Args:
             query: Original user query
             intent: Parsed query intent
             result: Query execution result
-            
+
         Returns:
             List of suggestions with query text and label
         """
@@ -140,24 +136,15 @@ class QuerySuggester:
 
         # If no city filter, suggest adding one
         if not filters.get("city"):
-            suggestions.append({
-                "query": "Filter by Bangalore",
-                "label": "Add Bangalore filter",
-            })
+            suggestions.append({"query": "Filter by Bangalore", "label": "Add Bangalore filter"})
 
         # If no time filter, suggest adding one
         if not filters.get("time_range"):
-            suggestions.append({
-                "query": "Show last 6 months",
-                "label": "Add time filter",
-            })
+            suggestions.append({"query": "Show last 6 months", "label": "Add time filter"})
 
         # If no group_by, suggest adding one
         if not intent.get("group_by"):
-            suggestions.append({
-                "query": "Group by category",
-                "label": "Add grouping",
-            })
+            suggestions.append({"query": "Group by category", "label": "Add grouping"})
 
         return suggestions
 
@@ -171,12 +158,7 @@ class SmartSuggester:
         self.llm = llm_client
         self.base_suggester = QuerySuggester()
 
-    def suggest(
-        self,
-        query: str,
-        intent: dict[str, Any],
-        result: Any,
-    ) -> list[dict[str, str]]:
+    def suggest(self, query: str, intent: dict[str, Any], result: Any) -> list[dict[str, str]]:
         """Generate suggestions with LLM enhancement."""
         # Always get base suggestions
         suggestions = self.base_suggester.suggest(query, intent, result)
@@ -192,12 +174,7 @@ class SmartSuggester:
 
         return suggestions[:5]
 
-    def _get_llm_suggestions(
-        self,
-        query: str,
-        intent: dict,
-        result: Any,
-    ) -> list[dict] | None:
+    def _get_llm_suggestions(self, query: str, intent: dict, result: Any) -> list[dict] | None:
         """Get LLM-powered suggestions."""
         # This would use the LLM to generate contextual suggestions
         # For now, return None to use base suggestions

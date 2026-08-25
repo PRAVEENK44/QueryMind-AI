@@ -1,4 +1,5 @@
 """Enhanced Query Refinement - Better multi-turn memory."""
+
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -7,9 +8,10 @@ from typing import Any
 class QueryMemory:
     """
     Memory store for query context and refinement.
-    
+
     Handles multi-turn conversations with intelligent merge.
     """
+
     last_query: str | None = None
     last_intent: dict[str, Any] | None = None
     last_sql: str | None = None
@@ -26,23 +28,31 @@ class QueryMemory:
         self.last_result = result
 
         # Add to history
-        self.conversation_history.append({
-            "query": query,
-            "intent": intent,
-            "sql": sql,
-        })
+        self.conversation_history.append({"query": query, "intent": intent, "sql": sql})
 
         # Trim history
         if len(self.conversation_history) > self.MAX_HISTORY:
-            self.conversation_history = self.conversation_history[-self.MAX_HISTORY:]
+            self.conversation_history = self.conversation_history[-self.MAX_HISTORY :]
 
     def is_refinement(self, query: str) -> bool:
         """Check if query is a refinement of previous."""
         query_lower = query.lower()
         refinement_patterns = [
-            "only", "just", "now", "add", "filter", "restrict",
-            "with", "include", "exclude", "change", "update",
-            "instead", "rather", "but", "however",
+            "only",
+            "just",
+            "now",
+            "add",
+            "filter",
+            "restrict",
+            "with",
+            "include",
+            "exclude",
+            "change",
+            "update",
+            "instead",
+            "rather",
+            "but",
+            "however",
         ]
 
         # Also check if it's a short query (likely refinement)
@@ -59,7 +69,7 @@ class QueryMemory:
 class QueryRefiner:
     """
     Intelligent query refinement with context understanding.
-    
+
     Handles vague follow-ups and merges intelligently with previous query.
     """
 
@@ -80,14 +90,10 @@ class QueryRefiner:
         "bottom": {"order": "asc"},
     }
 
-    def refine(
-        self,
-        query: str,
-        previous_intent: dict[str, Any],
-    ) -> dict[str, Any]:
+    def refine(self, query: str, previous_intent: dict[str, Any]) -> dict[str, Any]:
         """
         Refine previous intent with new query.
-        
+
         Returns updated intent dictionary.
         """
         query_lower = query.lower()
@@ -154,6 +160,7 @@ class QueryRefiner:
     def _apply_limit_changes(self, query: str, current_limit: int) -> int:
         """Apply limit changes."""
         import re
+
         match = re.search(r"(top|first|last|bottom)\s+(\d+)", query.lower())
         if match:
             return int(match.group(2))

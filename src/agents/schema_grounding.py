@@ -1,4 +1,5 @@
 """Schema Grounding - Ensures LLM uses only valid schema columns."""
+
 from dataclasses import dataclass
 from typing import Any
 
@@ -6,6 +7,7 @@ from typing import Any
 @dataclass
 class SchemaColumn:
     """Represents a database column."""
+
     name: str
     type: str
     table: str
@@ -15,7 +17,7 @@ class SchemaColumn:
 class SchemaGrounder:
     """
     Provides schema-grounded context to prevent LLM hallucinations.
-    
+
     Ensures all LLM prompts include explicit schema information.
     """
 
@@ -31,16 +33,10 @@ class SchemaGrounder:
         for table_name, table_data in tables.items():
             for col_name, col_type in table_data.get("columns", {}).items():
                 key = f"{table_name}.{col_name}"
-                self.columns[key] = SchemaColumn(
-                    name=col_name,
-                    type=col_type,
-                    table=table_name,
-                )
+                self.columns[key] = SchemaColumn(name=col_name, type=col_type, table=table_name)
                 # Also add without table prefix
                 self.columns[col_name] = SchemaColumn(
-                    name=col_name,
-                    type=col_type,
-                    table=table_name,
+                    name=col_name, type=col_type, table=table_name
                 )
 
     def get_valid_columns(self, table: str | None = None) -> list[str]:
@@ -79,17 +75,55 @@ class SchemaGrounder:
         import re
 
         # Extract column references from query
-        col_pattern = r'\b(\w+)\b'
+        col_pattern = r"\b(\w+)\b"
         used_cols = re.findall(col_pattern, query.upper())
 
         # SQL keywords that aren't columns
         sql_keywords = {
-            "SELECT", "FROM", "WHERE", "GROUP", "ORDER", "BY", "HAVING",
-            "LIMIT", "JOIN", "LEFT", "RIGHT", "INNER", "ON", "AND", "OR",
-            "NOT", "IN", "BETWEEN", "LIKE", "IS", "NULL", "AS", "DISTINCT",
-            "SUM", "COUNT", "AVG", "MIN", "MAX", "COALESCE", "CASE", "WHEN",
-            "THEN", "ELSE", "END", "ASC", "DESC", "STRFTIME", "INTEGER",
-            "TEXT", "REAL", "PRIMARY", "KEY", "FOREIGN", "REFERENCES",
+            "SELECT",
+            "FROM",
+            "WHERE",
+            "GROUP",
+            "ORDER",
+            "BY",
+            "HAVING",
+            "LIMIT",
+            "JOIN",
+            "LEFT",
+            "RIGHT",
+            "INNER",
+            "ON",
+            "AND",
+            "OR",
+            "NOT",
+            "IN",
+            "BETWEEN",
+            "LIKE",
+            "IS",
+            "NULL",
+            "AS",
+            "DISTINCT",
+            "SUM",
+            "COUNT",
+            "AVG",
+            "MIN",
+            "MAX",
+            "COALESCE",
+            "CASE",
+            "WHEN",
+            "THEN",
+            "ELSE",
+            "END",
+            "ASC",
+            "DESC",
+            "STRFTIME",
+            "INTEGER",
+            "TEXT",
+            "REAL",
+            "PRIMARY",
+            "KEY",
+            "FOREIGN",
+            "REFERENCES",
         }
 
         valid_cols = set(self.get_valid_columns())
@@ -108,7 +142,10 @@ class SchemaGrounder:
                     invalid.append(col)
 
         if invalid:
-            return False, f"Invalid columns: {', '.join(invalid)}. Use only: {', '.join(sorted(valid_cols)[:10])}..."
+            return (
+                False,
+                f"Invalid columns: {', '.join(invalid)}. Use only: {', '.join(sorted(valid_cols)[:10])}...",
+            )
 
         return True, None
 
@@ -145,9 +182,7 @@ class PromptBuilder:
         self.grounder = SchemaGrounder(schema_info)
 
     def build_intent_prompt(
-        self,
-        query: str,
-        previous_intent: dict | None = None,
+        self, query: str, previous_intent: dict | None = None
     ) -> tuple[str, str]:
         """Build system and user prompts for intent parsing."""
         system_prompt = f"""You are a query intent parser. Convert natural language to structured JSON.
@@ -158,7 +193,7 @@ IMPORTANT: You must ONLY use columns that exist in the database schema below.
 
 Output JSON with these fields:
 - metric: The metric to query
-- aggregation: sum, count, avg, min, or max  
+- aggregation: sum, count, avg, min, or max
 - group_by: Field to group by (optional)
 - filters: Dictionary with time_range, city, category
 - limit: Number of results
@@ -173,23 +208,16 @@ If query is a refinement (words like "only", "just", "now"), merge with previous
 
         return system_prompt, user_prompt
 
-    def build_insight_prompt(
-        self,
-        query: str,
-        sql: str,
-        data: dict,
-    ) -> tuple[str, str]:
+    def build_insight_prompt(self, query: str, sql: str, data: dict) -> tuple[str, str]:
         """Build prompts for insight generation."""
-        system_prompt = self.grounder.build_explanation_prompt(
-            query, sql, str(data)[:500]
-        )
+        system_prompt = self.grounder.build_explanation_prompt(query, sql, str(data)[:500])
 
         return system_prompt, "Generate insights from this data"
 
     def validate_and_fix(self, query: str) -> tuple[str, bool]:
         """
         Validate and attempt to fix invalid column references.
-        
+
         Returns:
             Tuple of (fixed_query, was_modified)
         """
@@ -214,7 +242,7 @@ If query is a refinement (words like "only", "just", "now"), merge with previous
         }
 
         for wrong, correct in replacements.items():
-            fixed = re.sub(rf'\b{wrong}\b', correct, fixed, flags=re.IGNORECASE)
+            fixed = re.sub(rf"\b{wrong}\b", correct, fixed, flags=re.IGNORECASE)
 
         # Validate again
         is_valid, _ = self.grounder.validate_query(fixed)

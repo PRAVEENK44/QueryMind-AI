@@ -1,4 +1,5 @@
 """Performance Optimization - Caching and query optimization."""
+
 import hashlib
 import time
 from collections.abc import Callable
@@ -9,6 +10,7 @@ from typing import Any
 @dataclass
 class CacheEntry:
     """Cached query result."""
+
     result: Any
     timestamp: float
     ttl: int  # Time to live in seconds
@@ -21,7 +23,7 @@ class CacheEntry:
 class QueryCache:
     """
     In-memory cache for query results.
-    
+
     Caches:
     - Parsed intents
     - Generated SQL
@@ -53,9 +55,7 @@ class QueryCache:
     def set(self, key: str, value: Any, ttl: int | None = None):
         """Set cache value with TTL."""
         self._cache[key] = CacheEntry(
-            result=value,
-            timestamp=time.time(),
-            ttl=ttl or self.default_ttl,
+            result=value, timestamp=time.time(), ttl=ttl or self.default_ttl
         )
 
     def invalidate(self, key: str):
@@ -100,11 +100,11 @@ class OptimizedQueryEngine:
     def execute(self, query: str, use_cache: bool = True) -> Any:
         """
         Execute query with caching.
-        
+
         Args:
             query: SQL query
             use_cache: Whether to use cache
-            
+
         Returns:
             Execution result
         """
@@ -180,12 +180,13 @@ def get_query_cache() -> QueryCache:
 def cached_intent_parse(parser_func: Callable) -> Callable:
     """
     Decorator to cache intent parsing.
-    
+
     Usage:
         @cached_intent_parse
         def parse(self, query):
             ...
     """
+
     def wrapper(self, query: str, *args, **kwargs):
         # Try to get from cache
         cache = get_query_cache()

@@ -1,4 +1,5 @@
 """Eval Harness — Runs ground-truth queries, compares SQL + results, reports pass/fail."""
+
 import json
 import os
 import re
@@ -20,6 +21,7 @@ from src.llm.client import IntentParserLLM
 
 try:
     from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
+
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False
@@ -107,17 +109,22 @@ def save_run_history(summary: dict):
     """Append run summary to history file."""
     RUN_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(RUN_HISTORY_PATH, "a") as f:
-        f.write(json.dumps({
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "total": summary["total"],
-            "passed": summary["passed"],
-            "failed": summary["failed"],
-            "pass_rate": summary["pass_rate"],
-            "total_tokens": summary["total_tokens"],
-            "total_cost_usd": summary["total_cost_usd"],
-            "avg_latency_ms": summary["avg_latency_ms"],
-            "provider_breakdown": summary["provider_breakdown"],
-        }) + "\n")
+        f.write(
+            json.dumps(
+                {
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "total": summary["total"],
+                    "passed": summary["passed"],
+                    "failed": summary["failed"],
+                    "pass_rate": summary["pass_rate"],
+                    "total_tokens": summary["total_tokens"],
+                    "total_cost_usd": summary["total_cost_usd"],
+                    "avg_latency_ms": summary["avg_latency_ms"],
+                    "provider_breakdown": summary["provider_breakdown"],
+                }
+            )
+            + "\n"
+        )
 
 
 def compute_rolling_averages(history: list[dict], window: int = ROLLING_WINDOW) -> dict:
@@ -185,13 +192,45 @@ def normalize_sql(sql: str) -> str:
 
     # Uppercase SQL keywords
     keywords = [
-        "SELECT", "FROM", "WHERE", "GROUP BY", "ORDER BY", "HAVING", "LIMIT",
-        "JOIN", "LEFT JOIN", "RIGHT JOIN", "INNER JOIN", "OUTER JOIN", "ON",
-        "AND", "OR", "NOT", "IN", "BETWEEN", "LIKE", "IS", "NULL", "AS",
-        "DISTINCT", "CASE", "WHEN", "THEN", "ELSE", "END",
-        "SUM", "COUNT", "AVG", "MIN", "MAX", "COALESCE", "NULLIF",
-        "STRFTIME", "TO_CHAR",
-        "ASC", "DESC",
+        "SELECT",
+        "FROM",
+        "WHERE",
+        "GROUP BY",
+        "ORDER BY",
+        "HAVING",
+        "LIMIT",
+        "JOIN",
+        "LEFT JOIN",
+        "RIGHT JOIN",
+        "INNER JOIN",
+        "OUTER JOIN",
+        "ON",
+        "AND",
+        "OR",
+        "NOT",
+        "IN",
+        "BETWEEN",
+        "LIKE",
+        "IS",
+        "NULL",
+        "AS",
+        "DISTINCT",
+        "CASE",
+        "WHEN",
+        "THEN",
+        "ELSE",
+        "END",
+        "SUM",
+        "COUNT",
+        "AVG",
+        "MIN",
+        "MAX",
+        "COALESCE",
+        "NULLIF",
+        "STRFTIME",
+        "TO_CHAR",
+        "ASC",
+        "DESC",
     ]
     for kw in keywords:
         sql = re.sub(rf"\b{kw}\b", kw, sql, flags=re.IGNORECASE)
@@ -236,17 +275,20 @@ def extract_sql_structure(sql: str) -> dict[str, Any]:
         structure["tables"].append(from_match.group(1))
 
     # Extract JOINs
-    join_matches = re.findall(r"(LEFT|RIGHT|INNER|OUTER)?\s*JOIN\s+(\w+)\s+ON\s+([^ ]+)\s*=\s*([^ ]+)", norm, re.IGNORECASE)
+    join_matches = re.findall(
+        r"(LEFT|RIGHT|INNER|OUTER)?\s*JOIN\s+(\w+)\s+ON\s+([^ ]+)\s*=\s*([^ ]+)",
+        norm,
+        re.IGNORECASE,
+    )
     for j in join_matches:
-        structure["joins"].append({
-            "type": j[0] or "JOIN",
-            "table": j[1],
-            "on_left": j[2],
-            "on_right": j[3],
-        })
+        structure["joins"].append(
+            {"type": j[0] or "JOIN", "table": j[1], "on_left": j[2], "on_right": j[3]}
+        )
 
     # Extract WHERE
-    where_match = re.search(r"WHERE\s+(.*?)(?:\s+GROUP BY|\s+ORDER BY|\s+LIMIT|$)", norm, re.IGNORECASE)
+    where_match = re.search(
+        r"WHERE\s+(.*?)(?:\s+GROUP BY|\s+ORDER BY|\s+LIMIT|$)", norm, re.IGNORECASE
+    )
     if where_match:
         conditions = where_match.group(1).split(" AND ")
         structure["where_conditions"] = sorted([c.strip() for c in conditions])
@@ -273,7 +315,7 @@ def columns_fuzzy_match(gen_cols: list[str], exp_cols: list[str]) -> bool:
     """Fuzzy match column names allowing minor alias differences."""
     if len(gen_cols) != len(exp_cols):
         return False
-    
+
     # Normalize column names for comparison
     def normalize_col(col: str) -> str:
         # Remove table prefixes, AS aliases, and common prefixes/suffixes
@@ -285,16 +327,22 @@ def columns_fuzzy_match(gen_cols: list[str], exp_cols: list[str]) -> bool:
         if " as " in col:
             col = col.split(" as ")[0].strip()
         # Normalize common variations
-        col = col.replace("_", "").replace("total", "").replace("avg", "average").replace("count", "").replace("sum", "")
+        col = (
+            col.replace("_", "")
+            .replace("total", "")
+            .replace("avg", "average")
+            .replace("count", "")
+            .replace("sum", "")
+        )
         return col
-    
+
     gen_norm = [normalize_col(c) for c in gen_cols]
     exp_norm = [normalize_col(c) for c in exp_cols]
-    
+
     # Try exact match first
     if set(gen_norm) == set(exp_norm):
         return True
-    
+
     # Fuzzy match: check if each gen col has a close match in exp
     for g in gen_norm:
         matched = False
@@ -534,43 +582,245 @@ def build_schema_dict() -> dict[str, Any]:
     """Build schema dictionary matching production format for standalone parser."""
     return {
         "tables": {
-            "departments": {"columns": {"dept_id": "INTEGER", "name": "TEXT", "region": "TEXT", "budget": "REAL"}},
-            "employees": {"columns": {"emp_id": "INTEGER", "dept_id": "INTEGER", "first_name": "TEXT", "last_name": "TEXT", "hire_date": "TEXT", "status": "TEXT"}},
-            "salaries": {"columns": {"salary_id": "INTEGER", "emp_id": "INTEGER", "base_salary": "REAL", "bonus": "REAL", "effective_date": "TEXT"}},
-            "campaigns": {"columns": {"campaign_id": "INTEGER", "name": "TEXT", "channel": "TEXT", "start_date": "TEXT", "end_date": "TEXT", "budget": "REAL", "roi_percent": "REAL"}},
-            "customers": {"columns": {"customer_id": "INTEGER", "company_name": "TEXT", "industry": "TEXT", "campaign_source_id": "INTEGER", "total_ltv": "REAL"}},
-            "interactions": {"columns": {"interaction_id": "INTEGER", "customer_id": "INTEGER", "emp_id": "INTEGER", "type": "TEXT", "date": "TEXT", "sentiment_score": "REAL"}},
-            "warehouses": {"columns": {"warehouse_id": "INTEGER", "location": "TEXT", "capacity": "INTEGER", "manager_emp_id": "INTEGER"}},
-            "suppliers": {"columns": {"supplier_id": "INTEGER", "name": "TEXT", "country": "TEXT", "rating": "REAL"}},
-            "products": {"columns": {"product_id": "INTEGER", "supplier_id": "INTEGER", "name": "TEXT", "category": "TEXT", "unit_cost": "REAL", "msrp": "REAL"}},
-            "inventory": {"columns": {"inventory_id": "INTEGER", "warehouse_id": "INTEGER", "product_id": "INTEGER", "quantity_on_hand": "INTEGER", "restock_threshold": "INTEGER"}},
-            "orders": {"columns": {"order_id": "INTEGER", "customer_id": "INTEGER", "sales_rep_emp_id": "INTEGER", "date": "TEXT", "total_amount": "REAL", "status": "TEXT"}},
-            "order_items": {"columns": {"item_id": "INTEGER", "order_id": "INTEGER", "product_id": "INTEGER", "quantity": "INTEGER", "subtotal": "REAL"}},
-            "shipments": {"columns": {"shipment_id": "INTEGER", "order_id": "INTEGER", "warehouse_id": "INTEGER", "dispatch_date": "TEXT", "delivery_date": "TEXT", "status": "TEXT"}},
-            "invoices": {"columns": {"invoice_id": "INTEGER", "order_id": "INTEGER", "issue_date": "TEXT", "due_date": "TEXT", "paid_date": "TEXT", "status": "TEXT", "amount": "REAL"}}
+            "departments": {
+                "columns": {
+                    "dept_id": "INTEGER",
+                    "name": "TEXT",
+                    "region": "TEXT",
+                    "budget": "REAL",
+                }
+            },
+            "employees": {
+                "columns": {
+                    "emp_id": "INTEGER",
+                    "dept_id": "INTEGER",
+                    "first_name": "TEXT",
+                    "last_name": "TEXT",
+                    "hire_date": "TEXT",
+                    "status": "TEXT",
+                }
+            },
+            "salaries": {
+                "columns": {
+                    "salary_id": "INTEGER",
+                    "emp_id": "INTEGER",
+                    "base_salary": "REAL",
+                    "bonus": "REAL",
+                    "effective_date": "TEXT",
+                }
+            },
+            "campaigns": {
+                "columns": {
+                    "campaign_id": "INTEGER",
+                    "name": "TEXT",
+                    "channel": "TEXT",
+                    "start_date": "TEXT",
+                    "end_date": "TEXT",
+                    "budget": "REAL",
+                    "roi_percent": "REAL",
+                }
+            },
+            "customers": {
+                "columns": {
+                    "customer_id": "INTEGER",
+                    "company_name": "TEXT",
+                    "industry": "TEXT",
+                    "campaign_source_id": "INTEGER",
+                    "total_ltv": "REAL",
+                }
+            },
+            "interactions": {
+                "columns": {
+                    "interaction_id": "INTEGER",
+                    "customer_id": "INTEGER",
+                    "emp_id": "INTEGER",
+                    "type": "TEXT",
+                    "date": "TEXT",
+                    "sentiment_score": "REAL",
+                }
+            },
+            "warehouses": {
+                "columns": {
+                    "warehouse_id": "INTEGER",
+                    "location": "TEXT",
+                    "capacity": "INTEGER",
+                    "manager_emp_id": "INTEGER",
+                }
+            },
+            "suppliers": {
+                "columns": {
+                    "supplier_id": "INTEGER",
+                    "name": "TEXT",
+                    "country": "TEXT",
+                    "rating": "REAL",
+                }
+            },
+            "products": {
+                "columns": {
+                    "product_id": "INTEGER",
+                    "supplier_id": "INTEGER",
+                    "name": "TEXT",
+                    "category": "TEXT",
+                    "unit_cost": "REAL",
+                    "msrp": "REAL",
+                }
+            },
+            "inventory": {
+                "columns": {
+                    "inventory_id": "INTEGER",
+                    "warehouse_id": "INTEGER",
+                    "product_id": "INTEGER",
+                    "quantity_on_hand": "INTEGER",
+                    "restock_threshold": "INTEGER",
+                }
+            },
+            "orders": {
+                "columns": {
+                    "order_id": "INTEGER",
+                    "customer_id": "INTEGER",
+                    "sales_rep_emp_id": "INTEGER",
+                    "date": "TEXT",
+                    "total_amount": "REAL",
+                    "status": "TEXT",
+                }
+            },
+            "order_items": {
+                "columns": {
+                    "item_id": "INTEGER",
+                    "order_id": "INTEGER",
+                    "product_id": "INTEGER",
+                    "quantity": "INTEGER",
+                    "subtotal": "REAL",
+                }
+            },
+            "shipments": {
+                "columns": {
+                    "shipment_id": "INTEGER",
+                    "order_id": "INTEGER",
+                    "warehouse_id": "INTEGER",
+                    "dispatch_date": "TEXT",
+                    "delivery_date": "TEXT",
+                    "status": "TEXT",
+                }
+            },
+            "invoices": {
+                "columns": {
+                    "invoice_id": "INTEGER",
+                    "order_id": "INTEGER",
+                    "issue_date": "TEXT",
+                    "due_date": "TEXT",
+                    "paid_date": "TEXT",
+                    "status": "TEXT",
+                    "amount": "REAL",
+                }
+            },
         },
         "term_mappings": {
-            "sales": "total_amount", "revenue": "total_amount", "client": "customer_id",
-            "staff": "emp_id", "stock": "quantity_on_hand", "location": "region"
+            "sales": "total_amount",
+            "revenue": "total_amount",
+            "client": "customer_id",
+            "staff": "emp_id",
+            "stock": "quantity_on_hand",
+            "location": "region",
         },
         "relationships": [
-            {"from_table": "employees", "from_col": "dept_id", "to_table": "departments", "to_col": "dept_id"},
-            {"from_table": "salaries", "from_col": "emp_id", "to_table": "employees", "to_col": "emp_id"},
-            {"from_table": "customers", "from_col": "campaign_source_id", "to_table": "campaigns", "to_col": "campaign_id"},
-            {"from_table": "interactions", "from_col": "customer_id", "to_table": "customers", "to_col": "customer_id"},
-            {"from_table": "interactions", "from_col": "emp_id", "to_table": "employees", "to_col": "emp_id"},
-            {"from_table": "warehouses", "from_col": "manager_emp_id", "to_table": "employees", "to_col": "emp_id"},
-            {"from_table": "products", "from_col": "supplier_id", "to_table": "suppliers", "to_col": "supplier_id"},
-            {"from_table": "inventory", "from_col": "warehouse_id", "to_table": "warehouses", "to_col": "warehouse_id"},
-            {"from_table": "inventory", "from_col": "product_id", "to_table": "products", "to_col": "product_id"},
-            {"from_table": "orders", "from_col": "customer_id", "to_table": "customers", "to_col": "customer_id"},
-            {"from_table": "orders", "from_col": "sales_rep_emp_id", "to_table": "employees", "to_col": "emp_id"},
-            {"from_table": "order_items", "from_col": "order_id", "to_table": "orders", "to_col": "order_id"},
-            {"from_table": "order_items", "from_col": "product_id", "to_table": "products", "to_col": "product_id"},
-            {"from_table": "shipments", "from_col": "order_id", "to_table": "orders", "to_col": "order_id"},
-            {"from_table": "shipments", "from_col": "warehouse_id", "to_table": "warehouses", "to_col": "warehouse_id"},
-            {"from_table": "invoices", "from_col": "order_id", "to_table": "orders", "to_col": "order_id"}
-        ]
+            {
+                "from_table": "employees",
+                "from_col": "dept_id",
+                "to_table": "departments",
+                "to_col": "dept_id",
+            },
+            {
+                "from_table": "salaries",
+                "from_col": "emp_id",
+                "to_table": "employees",
+                "to_col": "emp_id",
+            },
+            {
+                "from_table": "customers",
+                "from_col": "campaign_source_id",
+                "to_table": "campaigns",
+                "to_col": "campaign_id",
+            },
+            {
+                "from_table": "interactions",
+                "from_col": "customer_id",
+                "to_table": "customers",
+                "to_col": "customer_id",
+            },
+            {
+                "from_table": "interactions",
+                "from_col": "emp_id",
+                "to_table": "employees",
+                "to_col": "emp_id",
+            },
+            {
+                "from_table": "warehouses",
+                "from_col": "manager_emp_id",
+                "to_table": "employees",
+                "to_col": "emp_id",
+            },
+            {
+                "from_table": "products",
+                "from_col": "supplier_id",
+                "to_table": "suppliers",
+                "to_col": "supplier_id",
+            },
+            {
+                "from_table": "inventory",
+                "from_col": "warehouse_id",
+                "to_table": "warehouses",
+                "to_col": "warehouse_id",
+            },
+            {
+                "from_table": "inventory",
+                "from_col": "product_id",
+                "to_table": "products",
+                "to_col": "product_id",
+            },
+            {
+                "from_table": "orders",
+                "from_col": "customer_id",
+                "to_table": "customers",
+                "to_col": "customer_id",
+            },
+            {
+                "from_table": "orders",
+                "from_col": "sales_rep_emp_id",
+                "to_table": "employees",
+                "to_col": "emp_id",
+            },
+            {
+                "from_table": "order_items",
+                "from_col": "order_id",
+                "to_table": "orders",
+                "to_col": "order_id",
+            },
+            {
+                "from_table": "order_items",
+                "from_col": "product_id",
+                "to_table": "products",
+                "to_col": "product_id",
+            },
+            {
+                "from_table": "shipments",
+                "from_col": "order_id",
+                "to_table": "orders",
+                "to_col": "order_id",
+            },
+            {
+                "from_table": "shipments",
+                "from_col": "warehouse_id",
+                "to_table": "warehouses",
+                "to_col": "warehouse_id",
+            },
+            {
+                "from_table": "invoices",
+                "from_col": "order_id",
+                "to_table": "orders",
+                "to_col": "order_id",
+            },
+        ],
     }
 
 
@@ -592,16 +842,15 @@ class EvalLLMClientAdapter:
         response_schema: dict[str, Any],
         temperature: float = 0.2,
     ) -> dict[str, Any] | None:
-        result = self.eval_client.structured_output(system_prompt, user_prompt, response_schema, temperature)
+        result = self.eval_client.structured_output(
+            system_prompt, user_prompt, response_schema, temperature
+        )
         self.last_usage = self.eval_client.last_usage.copy()
         return result
 
 
 def run_single_test(
-    eval_client: EvalLLMClient,
-    test: TestCase,
-    db_path: str,
-    schema_context: str,
+    eval_client: EvalLLMClient, test: TestCase, db_path: str, schema_context: str
 ) -> EvalResult:
     """Run a single test case using production IntentParserLLM with EvalLLMClient."""
     start = time.time()
@@ -681,7 +930,7 @@ def run_single_test(
     # Pass requires: SQL executes without error and returns at least min_rows
     # Be lenient: pass if SQL executes without error and returns at least min_rows
     sql_executes = exec_error is None and len(rows) >= test.min_rows
-    passed = (sql_executes or exec_match)
+    passed = sql_executes or exec_match
 
     # Confidence scoring (sampled)
     confidence_overall = None
@@ -691,6 +940,7 @@ def run_single_test(
     confidence_multi_query_flag = None
 
     import random
+
     if random.random() < CONFIDENCE_SAMPLE_RATE and generated_sql and not exec_error:
         try:
             # Initialize confidence scorer and execution engine
@@ -795,13 +1045,14 @@ def run_harness(
         print("Mode: Production parser with Ollama backend")
 
     for i, test in enumerate(test_cases, 1):
-        print(f"[{i}/{len(test_cases)}] {test.id} ({test.category}): {test.query[:60]}...", end=" ", flush=True)
+        print(
+            f"[{i}/{len(test_cases)}] {test.id} ({test.category}): {test.query[:60]}...",
+            end=" ",
+            flush=True,
+        )
 
         result = run_single_test(
-            eval_client=client,
-            test=test,
-            db_path=db_path,
-            schema_context=schema_context,
+            eval_client=client, test=test, db_path=db_path, schema_context=schema_context
         )
         results.append(result)
 
@@ -818,9 +1069,13 @@ def run_harness(
                 print(f"    Generated: {result.generated_sql[:120]}...")
                 print(f"    Expected:  {result.expected_sql[:120]}...")
             if not result.row_count_match:
-                print(f"    Row count: got {result.actual_row_count}, expected {result.expected_min_rows}-{result.expected_max_rows}")
+                print(
+                    f"    Row count: got {result.actual_row_count}, expected {result.expected_min_rows}-{result.expected_max_rows}"
+                )
             if not result.columns_match:
-                print(f"    Columns: got {result.actual_columns}, expected {result.expected_columns}")
+                print(
+                    f"    Columns: got {result.actual_columns}, expected {result.expected_columns}"
+                )
 
     client.close()
 
@@ -853,7 +1108,9 @@ def run_harness(
     rolling = compute_rolling_averages(history)
     if rolling:
         summary["rolling_averages"] = rolling
-        print(f"Rolling avg pass rate (last {rolling['window_size']} runs): {rolling['rolling_pass_rate']:.1f}%")
+        print(
+            f"Rolling avg pass rate (last {rolling['window_size']} runs): {rolling['rolling_pass_rate']:.1f}%"
+        )
         print(f"Rolling avg latency: {rolling['rolling_avg_latency_ms']:.0f}ms")
 
     # Baseline comparison
@@ -862,9 +1119,11 @@ def run_harness(
         comparison = compare_with_baseline(summary, baseline)
         summary["baseline_comparison"] = comparison
         if comparison.get("baseline_available"):
-            print(f"Baseline comparison: pass_rate delta={comparison['pass_rate_delta']:+.1f}%, "
-                  f"latency delta={comparison['latency_delta_ms']:+.0f}ms, "
-                  f"regression={comparison['regression']}")
+            print(
+                f"Baseline comparison: pass_rate delta={comparison['pass_rate_delta']:+.1f}%, "
+                f"latency delta={comparison['latency_delta_ms']:+.0f}ms, "
+                f"regression={comparison['regression']}"
+            )
     elif baseline_mode == "save":
         save_baseline(summary)
         print("Baseline saved.")
@@ -906,13 +1165,29 @@ def push_metrics_to_gateway(summary: dict):
         registry = CollectorRegistry()
 
         # Create gauges for eval metrics
-        gauge_pass_rate = Gauge('querymind_eval_pass_rate', 'Eval harness pass rate percentage', registry=registry)
-        gauge_total_tests = Gauge('querymind_eval_total_tests', 'Total number of tests in eval run', registry=registry)
-        gauge_passed_tests = Gauge('querymind_eval_passed_tests', 'Number of passed tests in eval run', registry=registry)
-        gauge_failed_tests = Gauge('querymind_eval_failed_tests', 'Number of failed tests in eval run', registry=registry)
-        gauge_avg_latency_ms = Gauge('querymind_eval_avg_latency_ms', 'Average query latency in eval run (ms)', registry=registry)
-        gauge_total_tokens = Gauge('querymind_eval_total_tokens', 'Total tokens used in eval run', registry=registry)
-        gauge_total_cost_usd = Gauge('querymind_eval_total_cost_usd', 'Total cost in USD for eval run', registry=registry)
+        gauge_pass_rate = Gauge(
+            "querymind_eval_pass_rate", "Eval harness pass rate percentage", registry=registry
+        )
+        gauge_total_tests = Gauge(
+            "querymind_eval_total_tests", "Total number of tests in eval run", registry=registry
+        )
+        gauge_passed_tests = Gauge(
+            "querymind_eval_passed_tests", "Number of passed tests in eval run", registry=registry
+        )
+        gauge_failed_tests = Gauge(
+            "querymind_eval_failed_tests", "Number of failed tests in eval run", registry=registry
+        )
+        gauge_avg_latency_ms = Gauge(
+            "querymind_eval_avg_latency_ms",
+            "Average query latency in eval run (ms)",
+            registry=registry,
+        )
+        gauge_total_tokens = Gauge(
+            "querymind_eval_total_tokens", "Total tokens used in eval run", registry=registry
+        )
+        gauge_total_cost_usd = Gauge(
+            "querymind_eval_total_cost_usd", "Total cost in USD for eval run", registry=registry
+        )
 
         # Set values
         gauge_pass_rate.set(summary.get("pass_rate", 0))
@@ -924,7 +1199,12 @@ def push_metrics_to_gateway(summary: dict):
         gauge_total_cost_usd.set(summary.get("total_cost_usd", 0))
 
         # Per-category metrics
-        gauge_cat_pass_rate = Gauge('querymind_eval_category_pass_rate', 'Pass rate per category', ['category'], registry=registry)
+        gauge_cat_pass_rate = Gauge(
+            "querymind_eval_category_pass_rate",
+            "Pass rate per category",
+            ["category"],
+            registry=registry,
+        )
         for r in summary.get("results", []):
             cat = r.get("category", "unknown")
             cat_results = [x for x in summary["results"] if x.get("category") == cat]
@@ -935,18 +1215,30 @@ def push_metrics_to_gateway(summary: dict):
                     gauge_cat_pass_rate.labels(category=cat).set(cat_passed / cat_total * 100)
 
         # Provider breakdown
-        gauge_provider_tokens = Gauge('querymind_eval_provider_tokens', 'Tokens per provider', ['provider'], registry=registry)
+        gauge_provider_tokens = Gauge(
+            "querymind_eval_provider_tokens", "Tokens per provider", ["provider"], registry=registry
+        )
         for provider, count in summary.get("provider_breakdown", {}).items():
             gauge_provider_tokens.labels(provider=provider).set(count)
 
         # Confidence metrics (if available)
-        confidence_results = [r for r in summary.get("results", []) if r.get("confidence_overall") is not None]
+        confidence_results = [
+            r for r in summary.get("results", []) if r.get("confidence_overall") is not None
+        ]
         if confidence_results:
-            gauge_confidence = Gauge('querymind_eval_avg_confidence', 'Average confidence score', registry=registry)
-            gauge_hallucination_rate = Gauge('querymind_eval_hallucination_rate', 'Hallucination rate', registry=registry)
+            gauge_confidence = Gauge(
+                "querymind_eval_avg_confidence", "Average confidence score", registry=registry
+            )
+            gauge_hallucination_rate = Gauge(
+                "querymind_eval_hallucination_rate", "Hallucination rate", registry=registry
+            )
 
-            avg_conf = sum(r["confidence_overall"] for r in confidence_results) / len(confidence_results)
-            hallucination_rate = sum(1 for r in confidence_results if r.get("confidence_hallucination_flag")) / len(confidence_results)
+            avg_conf = sum(r["confidence_overall"] for r in confidence_results) / len(
+                confidence_results
+            )
+            hallucination_rate = sum(
+                1 for r in confidence_results if r.get("confidence_hallucination_flag")
+            ) / len(confidence_results)
 
             gauge_confidence.set(avg_conf)
             gauge_hallucination_rate.set(hallucination_rate)
@@ -956,7 +1248,7 @@ def push_metrics_to_gateway(summary: dict):
             PUSHGATEWAY_URL,
             job=PUSHGATEWAY_JOB,
             registry=registry,
-            grouping_key={"instance": "eval-harness"}
+            grouping_key={"instance": "eval-harness"},
         )
         print(f"Metrics pushed to Pushgateway at {PUSHGATEWAY_URL}")
 
@@ -982,45 +1274,61 @@ def write_markdown_report(summary: dict, path: Path):
     # Rolling averages
     if "rolling_averages" in summary:
         r = summary["rolling_averages"]
-        lines.extend([
-            f"\n## Rolling Averages (last {r['window_size']} runs)",
-            f"**Rolling Pass Rate:** {r['rolling_pass_rate']}%",
-            f"**Rolling Avg Latency:** {r['rolling_avg_latency_ms']}ms",
-            f"**Rolling Avg Tokens:** {r['rolling_total_tokens']:,.0f}",
-            f"**Rolling Avg Cost:** ${r['rolling_total_cost_usd']:.6f}",
-            f"**Total Historical Runs:** {r['total_runs']}",
-        ])
+        lines.extend(
+            [
+                f"\n## Rolling Averages (last {r['window_size']} runs)",
+                f"**Rolling Pass Rate:** {r['rolling_pass_rate']}%",
+                f"**Rolling Avg Latency:** {r['rolling_avg_latency_ms']}ms",
+                f"**Rolling Avg Tokens:** {r['rolling_total_tokens']:,.0f}",
+                f"**Rolling Avg Cost:** ${r['rolling_total_cost_usd']:.6f}",
+                f"**Total Historical Runs:** {r['total_runs']}",
+            ]
+        )
 
     # Baseline comparison
     if "baseline_comparison" in summary:
         bc = summary["baseline_comparison"]
         if bc.get("baseline_available"):
             regression_flag = " ⚠️ REGRESSION DETECTED" if bc["regression"] else ""
-            lines.extend([
-                f"\n## Baseline Comparison{regression_flag}",
-                f"**Pass Rate Delta:** {bc['pass_rate_delta']:+.1f}%",
-                f"**Latency Delta:** {bc['latency_delta_ms']:+.0f}ms",
-                f"**Cost Delta:** ${bc['cost_delta_usd']:+.6f}",
-                f"**Tokens Delta:** {bc['tokens_delta']:+,}",
-            ])
+            lines.extend(
+                [
+                    f"\n## Baseline Comparison{regression_flag}",
+                    f"**Pass Rate Delta:** {bc['pass_rate_delta']:+.1f}%",
+                    f"**Latency Delta:** {bc['latency_delta_ms']:+.0f}ms",
+                    f"**Cost Delta:** ${bc['cost_delta_usd']:+.6f}",
+                    f"**Tokens Delta:** {bc['tokens_delta']:+,}",
+                ]
+            )
 
     # Confidence scoring summary
     confidence_results = [r for r in summary["results"] if r.get("confidence_overall") is not None]
     if confidence_results:
-        avg_confidence = sum(r["confidence_overall"] for r in confidence_results) / len(confidence_results)
-        avg_bt = sum(r["confidence_back_translation"] or 0 for r in confidence_results) / len(confidence_results)
-        hallucination_rate = sum(1 for r in confidence_results if r.get("confidence_hallucination_flag")) / len(confidence_results)
-        mq_agreement_avg = sum(r["confidence_multi_query_agreement"] or 0 for r in confidence_results) / len(confidence_results)
-        mq_flag_rate = sum(1 for r in confidence_results if r.get("confidence_multi_query_flag")) / len(confidence_results)
+        avg_confidence = sum(r["confidence_overall"] for r in confidence_results) / len(
+            confidence_results
+        )
+        avg_bt = sum(r["confidence_back_translation"] or 0 for r in confidence_results) / len(
+            confidence_results
+        )
+        hallucination_rate = sum(
+            1 for r in confidence_results if r.get("confidence_hallucination_flag")
+        ) / len(confidence_results)
+        mq_agreement_avg = sum(
+            r["confidence_multi_query_agreement"] or 0 for r in confidence_results
+        ) / len(confidence_results)
+        mq_flag_rate = sum(
+            1 for r in confidence_results if r.get("confidence_multi_query_flag")
+        ) / len(confidence_results)
 
-        lines.extend([
-            f"\n## Confidence Scoring (sampled {len(confidence_results)}/{summary['total']} queries)",
-            f"**Avg Overall Confidence:** {avg_confidence:.3f}",
-            f"**Avg Back-Translation Score:** {avg_bt:.3f}",
-            f"**Hallucination Rate:** {hallucination_rate:.1%}",
-            f"**Avg Multi-Query Agreement:** {mq_agreement_avg:.3f}",
-            f"**Multi-Query Disagreement Rate:** {mq_flag_rate:.1%}",
-        ])
+        lines.extend(
+            [
+                f"\n## Confidence Scoring (sampled {len(confidence_results)}/{summary['total']} queries)",
+                f"**Avg Overall Confidence:** {avg_confidence:.3f}",
+                f"**Avg Back-Translation Score:** {avg_bt:.3f}",
+                f"**Hallucination Rate:** {hallucination_rate:.1%}",
+                f"**Avg Multi-Query Agreement:** {mq_agreement_avg:.3f}",
+                f"**Multi-Query Disagreement Rate:** {mq_flag_rate:.1%}",
+            ]
+        )
 
     lines.append("\n## Results by Category\n")
 
@@ -1058,14 +1366,24 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="QueryMind AI Eval Harness")
     parser.add_argument("--queries", type=Path, default=None, help="Path to queries.jsonl")
     parser.add_argument("--db", type=str, default=None, help="Path to SQLite database")
-    parser.add_argument("--gemini-key", type=str, default=None, help="Gemini API key (or GEMINI_API_KEY env)")
-    parser.add_argument("--nvidia-key", type=str, default=None, help="NVIDIA API key (or NVIDIA_API_KEY env)")
+    parser.add_argument(
+        "--gemini-key", type=str, default=None, help="Gemini API key (or GEMINI_API_KEY env)"
+    )
+    parser.add_argument(
+        "--nvidia-key", type=str, default=None, help="NVIDIA API key (or NVIDIA_API_KEY env)"
+    )
     parser.add_argument("--ollama-url", type=str, default=None, help="Ollama base URL")
     parser.add_argument("--output-json", type=Path, default=None, help="Output JSON report path")
     parser.add_argument("--output-md", type=Path, default=None, help="Output Markdown report path")
-    parser.add_argument("--fail-on-regression", action="store_true", help="Exit with code 1 if any test fails")
-    parser.add_argument("--baseline", choices=["compare", "save"], default=None,
-                        help="Compare with saved baseline or save current run as baseline")
+    parser.add_argument(
+        "--fail-on-regression", action="store_true", help="Exit with code 1 if any test fails"
+    )
+    parser.add_argument(
+        "--baseline",
+        choices=["compare", "save"],
+        default=None,
+        help="Compare with saved baseline or save current run as baseline",
+    )
 
     args = parser.parse_args()
 
