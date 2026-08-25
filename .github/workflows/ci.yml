@@ -112,14 +112,18 @@ jobs:
       - name: Run Eval Harness
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
         run: |
           echo "Running eval harness..."
-          if [ -n "${GEMINI_API_KEY}" ]; then
+          if [ -n "${NVIDIA_API_KEY}" ]; then
+            echo "Using NVIDIA Nemotron 3 Ultra (high accuracy)"
+            python -m evals.harness --nvidia-key "${NVIDIA_API_KEY}" --output-json eval-results.json --output-md eval-report.md --fail-on-regression --baseline compare
+          elif [ -n "${GEMINI_API_KEY}" ]; then
             echo "Using Gemini 2.5 Flash Lite (high accuracy)"
             python -m evals.harness --gemini-key "${GEMINI_API_KEY}" --output-json eval-results.json --output-md eval-report.md --fail-on-regression --baseline compare
           else
-            echo "No GEMINI_API_KEY - using Ollama fallback (lower accuracy expected)"
-            echo "For high accuracy, add GEMINI_API_KEY to repo secrets (free from Google AI Studio)"
+            echo "No API keys - using Ollama fallback (lower accuracy expected)"
+            echo "For high accuracy, add NVIDIA_API_KEY or GEMINI_API_KEY to repo secrets"
             python -m evals.harness --output-json eval-results.json --output-md eval-report.md --baseline compare
           fi
 
@@ -136,39 +140,39 @@ jobs:
 
       - name: Generate GitHub Actions Summary
         run: |
-          echo "## 📊 Eval Harness Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## Eval Harness Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           python -c "
 import json
 with open('eval-results.json') as f:
     data = json.load(f)
 
-print(f\"| Metric | Value |\") >> $GITHUB_STEP_SUMMARY
-print(f\"|--------|-------|\") >> $GITHUB_STEP_SUMMARY
-print(f\"| Total Tests | {data['total']} |\") >> $GITHUB_STEP_SUMMARY
-print(f\"| Passed | {data['passed']} |\") >> $GITHUB_STEP_SUMMARY
-print(f\"| Failed | {data['failed']} |\") >> $GITHUB_STEP_SUMMARY
-print(f\"| Pass Rate | {data['pass_rate']}% |\") >> $GITHUB_STEP_SUMMARY
-print(f\"| Avg Latency | {data['avg_latency_ms']:.0f}ms |\") >> $GITHUB_STEP_SUMMARY
-print(f\"| Total Tokens | {data['total_tokens']:,} |\") >> $GITHUB_STEP_SUMMARY
-print(f\"| Total Cost | \${data['total_cost_usd']:.6f} |\") >> $GITHUB_STEP_SUMMARY
-print(f\"| Providers | {data['provider_breakdown']} |\") >> $GITHUB_STEP_SUMMARY
+print(f'| Metric | Value |') >> '$GITHUB_STEP_SUMMARY'
+print(f'|--------|-------|') >> '$GITHUB_STEP_SUMMARY'
+print(f'| Total Tests | {data[\"total\"]} |') >> '$GITHUB_STEP_SUMMARY'
+print(f'| Passed | {data[\"passed\"]} |') >> '$GITHUB_STEP_SUMMARY'
+print(f'| Failed | {data[\"failed\"]} |') >> '$GITHUB_STEP_SUMMARY'
+print(f'| Pass Rate | {data[\"pass_rate\"]}% |') >> '$GITHUB_STEP_SUMMARY'
+print(f'| Avg Latency | {data[\"avg_latency_ms\"]:.0f}ms |') >> '$GITHUB_STEP_SUMMARY'
+print(f'| Total Tokens | {data[\"total_tokens\"]:,} |') >> '$GITHUB_STEP_SUMMARY'
+print(f'| Total Cost | ${data[\"total_cost_usd\"]:.6f} |') >> '$GITHUB_STEP_SUMMARY'
+print(f'| Providers | {data[\"provider_breakdown\"]} |') >> '$GITHUB_STEP_SUMMARY'
 
 if 'rolling_averages' in data:
     r = data['rolling_averages']
-    print(f\"| Rolling Pass Rate (last {r['window_size']}) | {r['rolling_pass_rate']}% |\") >> $GITHUB_STEP_SUMMARY
+    print(f'| Rolling Pass Rate (last {r[\"window_size\"]}) | {r[\"rolling_pass_rate\"]}% |') >> '$GITHUB_STEP_SUMMARY'
 
 if 'baseline_comparison' in data and data['baseline_comparison'].get('baseline_available'):
     bc = data['baseline_comparison']
-    regression = '⚠️ REGRESSION' if bc['regression'] else '✅ OK'
-    print(f\"| Baseline Comparison | {regression} (Δ{bc['pass_rate_delta']:+.1f}%) |\") >> $GITHUB_STEP_SUMMARY
+    regression = 'REGRESSION' if bc['regression'] else 'OK'
+    print(f'| Baseline Comparison | {regression} (delta {bc[\"pass_rate_delta\"]:+.1f}%) |') >> '$GITHUB_STEP_SUMMARY'
 
 confidence_results = [r for r in data['results'] if r.get('confidence_overall') is not None]
 if confidence_results:
     avg_conf = sum(r['confidence_overall'] for r in confidence_results) / len(confidence_results)
     hallucination_rate = sum(1 for r in confidence_results if r.get('confidence_hallucination_flag')) / len(confidence_results)
-    print(f\"| Avg Confidence (sampled {len(confidence_results)}) | {avg_conf:.3f} |\") >> $GITHUB_STEP_SUMMARY
-    print(f\"| Hallucination Rate | {hallucination_rate:.1%} |\") >> $GITHUB_STEP_SUMMARY
+    print(f'| Avg Confidence (sampled {len(confidence_results)}) | {avg_conf:.3f} |') >> '$GITHUB_STEP_SUMMARY'
+    print(f'| Hallucination Rate | {hallucination_rate:.1%} |') >> '$GITHUB_STEP_SUMMARY'
 "
 
       - name: Comment PR with eval summary
@@ -182,7 +186,7 @@ if confidence_results:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '## 📊 Eval Harness Results\n\n' + report
+              body: '## Eval Harness Results\n\n' + report
             })
 
       - name: Fail on regression
@@ -195,14 +199,14 @@ import json, sys, os
 with open('eval-results.json') as f:
     data = json.load(f)
 if data.get('baseline_comparison', {}).get('regression'):
-    print('❌ Baseline regression detected!')
+    print('Baseline regression detected!')
     sys.exit(1)
 # Also fail if pass rate drops below threshold
 min_rate = float(os.environ.get('MIN_PASS_RATE', '50'))
 if data['pass_rate'] < min_rate:
-    print(f\"❌ Pass rate {data['pass_rate']}% below minimum threshold ({min_rate}%)\")
+    print(f'Pass rate {data[\"pass_rate\"]}% below minimum threshold ({min_rate}%)')
     sys.exit(1)
-print('✅ Eval checks passed')
+print('Eval checks passed')
 "
 
   docker-build:
@@ -317,6 +321,7 @@ print('✅ Eval checks passed')
       - name: Run performance benchmark
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
         run: |
           python -c "
 import time, statistics
@@ -361,18 +366,18 @@ print(f'P50 latency: {statistics.median(latencies):.0f}ms')
 print(f'P95 latency: {statistics.quantiles(latencies, n=20)[18] if len(latencies) >= 20 else max(latencies):.0f}ms')
 print(f'Avg latency: {statistics.mean(latencies):.0f}ms')
 print(f'Avg tokens: {statistics.mean(token_counts):.0f}')
-print(f'Avg cost: \${statistics.mean(costs):.6f}')
+print(f'Avg cost: ${statistics.mean(costs):.6f}')
 
 # Regression thresholds
 P95_THRESHOLD = 5000  # ms
 AVG_COST_THRESHOLD = 0.01  # USD
 if statistics.quantiles(latencies, n=20)[18] if len(latencies) >= 20 else max(latencies) > P95_THRESHOLD:
-    print(f'❌ P95 latency exceeds threshold ({P95_THRESHOLD}ms)')
+    print(f'P95 latency exceeds threshold ({P95_THRESHOLD}ms)')
     exit(1)
 if statistics.mean(costs) > AVG_COST_THRESHOLD:
-    print(f'❌ Avg cost exceeds threshold (\${AVG_COST_THRESHOLD})')
+    print(f'Avg cost exceeds threshold (${AVG_COST_THRESHOLD})')
     exit(1)
-print('✅ Performance benchmarks passed')
+print('Performance benchmarks passed')
 "
 
   deploy-preview:
