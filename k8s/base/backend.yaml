@@ -1,0 +1,159 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: querymind-backend
+  namespace: querymind
+  labels:
+    app.kubernetes.io/name: querymind
+    app.kubernetes.io/component: backend
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: querymind
+    app.kubernetes.io/component: backend
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: querymind-backend
+  namespace: querymind
+  labels:
+    app.kubernetes.io/name: querymind
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: querymind
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: querymind
+        app.kubernetes.io/component: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        runAsNonRoot: true
+      containers:
+        - name: backend
+          image: querymind-ai:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: querymind-config
+                  key: DATABASE_URL
+            - name: ALLOWED_ORIGINS
+              valueFrom:
+                configMapKeyRef:
+                  name: querymind-config
+                  key: ALLOWED_ORIGINS
+            - name: PYTHONUNBUFFERED
+              valueFrom:
+                configMapKeyRef:
+                  name: querymind-config
+                  key: PYTHONUNBUFFERED
+            - name: ROW_LIMIT
+              valueFrom:
+                configMapKeyRef:
+                  name: querymind-config
+                  key: ROW_LIMIT
+            - name: OLLAMA_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: querymind-config
+                  key: OLLAMA_HOST
+            - name: ENABLE_CONFIDENCE_SCORING
+              valueFrom:
+                configMapKeyRef:
+                  name: querymind-config
+                  key: ENABLE_CONFIDENCE_SCORING
+            - name: ENABLE_MULTI_QUERY_VALIDATION
+              valueFrom:
+                configMapKeyRef:
+                  name: querymind-config
+                  key: ENABLE_MULTI_QUERY_VALIDATION
+            - name: CONFIDENCE_SAMPLE_RATE
+              valueFrom:
+                configMapKeyRef:
+                  name: querymind-config
+                  key: CONFIDENCE_SAMPLE_RATE
+            - name: BACK_TRANSLATION_THRESHOLD
+              valueFrom:
+                configMapKeyRef:
+                  name: querymind-config
+                  key: BACK_TRANSLATION_THRESHOLD
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: querymind-secrets
+                  key: OPENAI_API_KEY
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: querymind-secrets
+                  key: GEMINI_API_KEY
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: querymind-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: querymind-secrets
+                  key: POSTGRES_PASSWORD
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/uploads
+            - name: logs
+              mountPath: /app/logs
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+      volumes:
+        - name: uploads
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}

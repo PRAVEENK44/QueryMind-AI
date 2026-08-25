@@ -1,0 +1,116 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namespace: querymind-staging
+
+namePrefix: staging-
+
+commonLabels:
+  app.kubernetes.io/environment: staging
+
+# Staging-specific configuration
+configMapGenerator:
+  - name: querymind-config
+    behavior: merge
+    literals:
+      - ALLOWED_ORIGINS=https://querymind-staging.example.com
+      - PYTHONUNBUFFERED=1
+      - ROW_LIMIT=1000
+      - OLLAMA_HOST=host.docker.internal
+      - ENABLE_CONFIDENCE_SCORING=true
+      - ENABLE_MULTI_QUERY_VALIDATION=true
+      - CONFIDENCE_SAMPLE_RATE=0.1
+      - BACK_TRANSLATION_THRESHOLD=0.7
+      - LOG_LEVEL=INFO
+
+# Staging secrets (different from production)
+secretGenerator:
+  - name: querymind-secrets
+    behavior: merge
+    literals:
+      - POSTGRES_USER=querymind_ro_user
+      - POSTGRES_PASSWORD=staging_ro_password_change_me
+      - POSTGRES_RW_USER=querymind_rw_user
+      - POSTGRES_RW_PASSWORD=staging_rw_password_change_me
+      - OPENAI_API_KEY=sk-staging-key
+      - GEMINI_API_KEY=staging-gemini-key
+      - REDIS_PASSWORD=staging_redis_password
+
+# Staging-specific patches
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: querymind-backend
+        namespace: querymind-staging
+      spec:
+        replicas: 2
+        template:
+          spec:
+            containers:
+              - name: backend
+                resources:
+                  requests:
+                    cpu: "500m"
+                    memory: "512Mi"
+                  limits:
+                    cpu: "1000m"
+                    memory: "1Gi"
+    target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/component=backend
+
+  - patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: querymind-postgres
+        namespace: querymind-staging
+      spec:
+        volumeClaimTemplates:
+          - metadata:
+              name: postgres-data
+            spec:
+              resources:
+                requests:
+                  storage: 5Gi
+    target:
+      kind: StatefulSet
+      labelSelector: app.kubernetes.io/component=postgres
+
+  - patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: querymind-ingress
+        namespace: querymind-staging
+      spec:
+        tls:
+          - hosts:
+              - querymind-staging.example.com
+            secretName: staging-querymind-tls
+        rules:
+          - host: querymind-staging.example.com
+            http:
+              paths:
+                - path: /api
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: staging-querymind-backend
+                      port:
+                        number: 8000
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: staging-querymind-streamlit
+                      port:
+                        number: 8501
+    target:
+      kind: Ingress
+      labelSelector: app.kubernetes.io/component=ingress

@@ -1,0 +1,484 @@
+{
+  "dashboard": {
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": "-- Grafana --",
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "type": "dashboard"
+        }
+      ]
+    },
+    "editable": true,
+    "gnetId": null,
+    "graphTooltip": 0,
+    "id": null,
+    "links": [],
+    "panels": [
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {"lineWidth": 1},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 2},
+                {"color": "red", "value": 5}
+              ]
+            },
+            "unit": "s"
+          },
+          "overrides": []
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "id": 1,
+        "options": {
+          "legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom"},
+          "tooltip": {"mode": "single", "sort": "none"}
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(querymind_query_latency_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(querymind_query_latency_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(querymind_query_latency_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p99",
+            "refId": "C"
+          }
+        ],
+        "title": "Query Latency (p50, p95, p99)",
+        "type": "timeseries"
+      },
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.01},
+                {"color": "red", "value": 0.05}
+              ]
+            },
+            "unit": "percentunit"
+          },
+          "overrides": []
+        },
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0},
+        "id": 2,
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto"
+        },
+        "pluginVersion": "10.0.0",
+        "targets": [
+          {
+            "expr": "sum(rate(querymind_query_errors_total[5m])) / sum(rate(querymind_query_total[5m]))",
+            "refId": "A"
+          }
+        ],
+        "title": "Error Rate",
+        "type": "gauge"
+      },
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 50},
+                {"color": "green", "value": 80}
+              ]
+            },
+            "unit": "percent"
+          },
+          "overrides": []
+        },
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
+        "id": 3,
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto"
+        },
+        "pluginVersion": "10.0.0",
+        "targets": [
+          {
+            "expr": "querymind_eval_pass_rate",
+            "refId": "A"
+          }
+        ],
+        "title": "Eval Pass Rate",
+        "type": "gauge"
+      },
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {"lineWidth": 1},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null}
+              ]
+            },
+            "unit": "reqps"
+          },
+          "overrides": []
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "id": 4,
+        "options": {
+          "legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom"},
+          "tooltip": {"mode": "single"}
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(querymind_query_total{status=\"success\"}[5m])) by (endpoint)",
+            "legendFormat": "{{endpoint}} (success)",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(querymind_query_total{status=\"error\"}[5m])) by (endpoint)",
+            "legendFormat": "{{endpoint}} (error)",
+            "refId": "B"
+          }
+        ],
+        "title": "Query Throughput (req/s)",
+        "type": "timeseries"
+      },
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {"lineWidth": 1},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null}
+              ]
+            },
+            "unit": "USD"
+          },
+          "overrides": []
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "id": 5,
+        "options": {
+          "legend": {"calcs": ["mean", "last"], "displayMode": "table", "placement": "bottom"},
+          "tooltip": {"mode": "single"}
+        },
+        "targets": [
+          {
+            "expr": "rate(querymind_query_cost_usd_total[1h])",
+            "legendFormat": "{{provider}}/{{model}}",
+            "refId": "A"
+          }
+        ],
+        "title": "Token Cost Rate (USD/hr) — Tracked for Governance",
+        "type": "timeseries"
+      },
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 0.3},
+                {"color": "green", "value": 0.7}
+              ]
+            },
+            "unit": "short"
+          },
+          "overrides": []
+        },
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 16},
+        "id": 6,
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto"
+        },
+        "pluginVersion": "10.0.0",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.5, sum(rate(querymind_confidence_score_bucket[5m])) by (le))",
+            "refId": "A"
+          }
+        ],
+        "title": "Median Confidence Score",
+        "type": "gauge"
+      },
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.2},
+                {"color": "red", "value": 0.4}
+              ]
+            },
+            "unit": "percentunit"
+          },
+          "overrides": []
+        },
+        "gridPos": {"h": 8, "w": 6, "x": 6, "y": 16},
+        "id": 7,
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto"
+        },
+        "pluginVersion": "10.0.0",
+        "targets": [
+          {
+            "expr": "rate(querymind_hallucination_detected_total[5m]) / rate(querymind_query_total[5m])",
+            "refId": "A"
+          }
+        ],
+        "title": "Hallucination Rate",
+        "type": "gauge"
+      },
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.1},
+                {"color": "red", "value": 0.3}
+              ]
+            },
+            "unit": "percentunit"
+          },
+          "overrides": []
+        },
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 16},
+        "id": 8,
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto"
+        },
+        "pluginVersion": "10.0.0",
+        "targets": [
+          {
+            "expr": "rate(querymind_multi_query_disagreement_total[5m]) / rate(querymind_query_total[5m])",
+            "refId": "A"
+          }
+        ],
+        "title": "Multi-Query Disagreement Rate",
+        "type": "gauge"
+      },
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {"lineWidth": 1},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null}
+              ]
+            },
+            "unit": "short"
+          },
+          "overrides": []
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "id": 9,
+        "options": {
+          "legend": {"calcs": ["last"], "displayMode": "table", "placement": "bottom"},
+          "tooltip": {"mode": "single"}
+        },
+        "targets": [
+          {
+            "expr": "querymind_eval_total_tests",
+            "legendFormat": "Total Tests",
+            "refId": "A"
+          },
+          {
+            "expr": "querymind_eval_passed_tests",
+            "legendFormat": "Passed",
+            "refId": "B"
+          },
+          {
+            "expr": "querymind_eval_failed_tests",
+            "legendFormat": "Failed",
+            "refId": "C"
+          }
+        ],
+        "title": "Eval Harness Results",
+        "type": "timeseries"
+      },
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {"lineWidth": 1},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null}
+              ]
+            },
+            "unit": "ms"
+          },
+          "overrides": []
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+        "id": 10,
+        "options": {
+          "legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom"},
+          "tooltip": {"mode": "single"}
+        },
+        "targets": [
+          {
+            "expr": "querymind_eval_avg_latency_ms",
+            "legendFormat": "Avg Latency (ms)",
+            "refId": "A"
+          }
+        ],
+        "title": "Eval Avg Latency",
+        "type": "timeseries"
+      },
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {"lineWidth": 1},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null}
+              ]
+            },
+            "unit": "short"
+          },
+          "overrides": []
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+        "id": 11,
+        "options": {
+          "legend": {"calcs": ["mean", "last"], "displayMode": "table", "placement": "bottom"},
+          "tooltip": {"mode": "single"}
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(querymind_query_tokens_total{type=\"total\"}[5m])) by (provider, model)",
+            "legendFormat": "{{provider}}/{{model}}",
+            "refId": "A"
+          }
+        ],
+        "title": "Token Usage Rate (tokens/s)",
+        "type": "timeseries"
+      },
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {"lineWidth": 1},
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null}
+              ]
+            },
+            "unit": "short"
+          },
+          "overrides": []
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
+        "id": 12,
+        "options": {
+          "legend": {"calcs": ["mean", "last"], "displayMode": "table", "placement": "bottom"},
+          "tooltip": {"mode": "single"}
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(querymind_query_tokens_total{type=\"prompt\"}[5m])) by (provider, model)",
+            "legendFormat": "{{provider}}/{{model}} (prompt)",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(querymind_query_tokens_total{type=\"completion\"}[5m])) by (provider, model)",
+            "legendFormat": "{{provider}}/{{model}} (completion)",
+            "refId": "B"
+          }
+        ],
+        "title": "Token Breakdown (Prompt vs Completion)",
+        "type": "timeseries"
+      }
+    ],
+    "refresh": "10s",
+    "schemaVersion": 38,
+    "style": "dark",
+    "tags": ["querymind", "nl-to-sql", "analytics"],
+    "templating": {
+      "list": []
+    },
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "",
+    "title": "QueryMind AI - NL-to-SQL Analytics Platform",
+    "uid": "querymind-overview",
+    "version": 1,
+    "weekStart": ""
+  },
+  "folderId": 0,
+  "folderTitle": "QueryMind",
+  "folderUid": "",
+  "message": "QueryMind AI Observability Dashboard",
+  "overwrite": true
+}

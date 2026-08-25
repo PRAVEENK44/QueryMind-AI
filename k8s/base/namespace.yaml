@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: querymind
+  labels:
+    app.kubernetes.io/name: querymind
+    app.kubernetes.io/component: namespace

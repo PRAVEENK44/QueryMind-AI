@@ -1,5 +1,5 @@
 """Auto Dashboard Generator - Creates complete dashboards from single query."""
-from typing import Dict, Any, List, Optional
+from typing import Any
 
 
 class DashboardGenerator:
@@ -8,11 +8,11 @@ class DashboardGenerator:
     
     Creates multiple visualizations, KPIs, and insights in one go.
     """
-    
+
     def __init__(self):
         self.query_definitions = self._build_query_definitions()
-    
-    def _build_query_definitions(self) -> Dict[str, List[Dict]]:
+
+    def _build_query_definitions(self) -> dict[str, list[dict]]:
         """Build standard dashboard query definitions."""
         return {
             "sales": [
@@ -88,13 +88,13 @@ class DashboardGenerator:
                 },
             ],
         }
-    
+
     def generate(
         self,
         query: str,
         execution_engine,
-        schema_info: Dict,
-    ) -> Dict[str, Any]:
+        schema_info: dict,
+    ) -> dict[str, Any]:
         """
         Generate complete dashboard.
         
@@ -108,17 +108,17 @@ class DashboardGenerator:
         """
         dashboard_type = self._detect_dashboard_type(query)
         queries = self.query_definitions.get(dashboard_type, self.query_definitions["sales"])
-        
+
         results = {
             "type": dashboard_type,
             "kpis": [],
             "charts": [],
             "insights": [],
         }
-        
+
         for q_def in queries:
             result = execution_engine.execute(q_def["sql"])
-            
+
             if result.success and not result.data.empty:
                 if "chart" in q_def:
                     # This is a chart query
@@ -140,22 +140,22 @@ class DashboardGenerator:
                         "value": value,
                         "format": q_def.get("format", "number"),
                     })
-        
+
         # Generate insights
         results["insights"] = self._generate_dashboard_insights(results)
-        
+
         return results
-    
+
     def _detect_dashboard_type(self, query: str) -> str:
         """Detect which dashboard to generate."""
         query_lower = query.lower()
-        
+
         if "product" in query_lower:
             return "products"
         if "customer" in query_lower or "user" in query_lower:
             return "customers"
         return "sales"
-    
+
     def _create_chart(
         self,
         df: Any,
@@ -163,7 +163,6 @@ class DashboardGenerator:
         title: str,
     ) -> Any:
         """Create a chart from data."""
-        import pandas as pd
         import plotly.graph_objects as go
         if chart_type == "line":
             x_col = df.columns[0]
@@ -171,7 +170,7 @@ class DashboardGenerator:
             fig = go.Figure(go.Scatter(x=df[x_col], y=df[y_col], mode="lines+markers"))
             fig.update_layout(title=title, template="plotly_white")
             return fig
-        
+
         elif chart_type == "bar":
             x_col = df.columns[0]
             y_col = df.columns[-1]
@@ -180,30 +179,30 @@ class DashboardGenerator:
             if len(df) > 5:
                 fig.update_xaxes(tickangle=-45)
             return fig
-        
+
         elif chart_type == "pie":
             label_col = df.columns[0]
             value_col = df.columns[-1]
             fig = go.Figure(go.Pie(labels=df[label_col], values=df[value_col]))
             fig.update_layout(title=title)
             return fig
-        
+
         else:
             fig = go.Figure()
             fig.update_layout(title=title)
             return fig
-    
-    def _generate_dashboard_insights(self, results: Dict) -> List[str]:
+
+    def _generate_dashboard_insights(self, results: dict) -> list[str]:
         """Generate insights from dashboard data."""
         insights = []
-        
+
         # Revenue insights
         for kpi in results.get("kpis", []):
             if kpi["name"] == "Total Revenue":
                 insights.append(f"Total revenue: ₹{kpi['value']:,.0f}")
             elif kpi["name"] == "Avg Order Value":
                 insights.append(f"Average order value: ₹{kpi['value']:,.0f}")
-        
+
         # Top performer insights
         for chart in results.get("charts", []):
             if chart["type"] == "bar" and "top" in chart["title"].lower():
@@ -211,18 +210,18 @@ class DashboardGenerator:
                 if hasattr(df, "y") and len(df.y) > 0:
                     top_item = df.x[0] if hasattr(df, "x") else "item"
                     insights.append(f"Top performer: {top_item}")
-        
+
         return insights[:3]
 
 
 class KPICard:
     """Individual KPI card for dashboard."""
-    
+
     def __init__(self, name: str, value: Any, format_type: str = "number"):
         self.name = name
         self.value = value
         self.format_type = format_type
-    
+
     def format_value(self) -> str:
         """Format value based on type."""
         if self.format_type == "currency":
@@ -231,8 +230,8 @@ class KPICard:
             return f"{self.value:.1f}%"
         else:
             return f"{self.value:,}"
-    
-    def to_dict(self) -> Dict:
+
+    def to_dict(self) -> dict:
         """Convert to dictionary."""
         return {
             "name": self.name,

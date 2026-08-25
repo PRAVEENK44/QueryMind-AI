@@ -1,0 +1,195 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+# Namespace is inherited from base (querymind)
+# Override base config with kind-specific config
+configMapGenerator:
+  - name: querymind-config
+    namespace: querymind
+    behavior: replace
+    literals:
+      - ALLOWED_ORIGINS=http://localhost:8000,http://localhost:8501,http://localhost:3000,http://localhost:9090
+      - PYTHONUNBUFFERED=1
+      - ROW_LIMIT=1000
+      - DATABASE_URL=postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@querymind-postgres:5432/querymind
+      - OLLAMA_HOST=host.docker.internal
+      - ENABLE_CONFIDENCE_SCORING=true
+      - ENABLE_MULTI_QUERY_VALIDATION=true
+      - CONFIDENCE_SAMPLE_RATE=0.1
+      - BACK_TRANSLATION_THRESHOLD=0.7
+      - LOG_LEVEL=INFO
+
+secretGenerator:
+  - name: querymind-secrets
+    namespace: querymind
+    behavior: replace
+    literals:
+      - POSTGRES_USER=querymind_ro_user
+      - POSTGRES_PASSWORD=kind_ro_password
+      - POSTGRES_RW_USER=querymind_rw_user
+      - POSTGRES_RW_PASSWORD=kind_rw_password
+      - OPENAI_API_KEY=sk-kind-key
+      - GEMINI_API_KEY=kind-gemini-key
+      - REDIS_PASSWORD=kind_redis_password
+    type: Opaque
+
+patches:
+  # Reduce resource requests for kind
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: querymind-backend
+        namespace: querymind
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: backend
+                resources:
+                  requests:
+                    cpu: "250m"
+                    memory: "256Mi"
+                  limits:
+                    cpu: "500m"
+                    memory: "512Mi"
+    target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/component=backend
+
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: querymind-streamlit
+        namespace: querymind
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: streamlit
+                resources:
+                  requests:
+                    cpu: "125m"
+                    memory: "128Mi"
+                  limits:
+                    cpu: "250m"
+                    memory: "256Mi"
+    target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/component=streamlit
+
+  - patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: querymind-postgres
+        namespace: querymind
+      spec:
+        volumeClaimTemplates:
+          - metadata:
+              name: postgres-data
+            spec:
+              resources:
+                requests:
+                  storage: 1Gi
+    target:
+      kind: StatefulSet
+      labelSelector: app.kubernetes.io/component=postgres
+
+  # Remove ingress (use hostPort from kind-config instead)
+  - patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: querymind-ingress
+        namespace: querymind
+      spec:
+        rules: []
+    target:
+      kind: Ingress
+      labelSelector: app.kubernetes.io/component=ingress
+
+patches:
+  # Reduce resource requests for kind
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: querymind-backend
+        namespace: querymind
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: backend
+                resources:
+                  requests:
+                    cpu: "250m"
+                    memory: "256Mi"
+                  limits:
+                    cpu: "500m"
+                    memory: "512Mi"
+    target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/component=backend
+
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: querymind-streamlit
+        namespace: querymind
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: streamlit
+                resources:
+                  requests:
+                    cpu: "125m"
+                    memory: "128Mi"
+                  limits:
+                    cpu: "250m"
+                    memory: "256Mi"
+    target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/component=streamlit
+
+  - patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: querymind-postgres
+        namespace: querymind
+      spec:
+        volumeClaimTemplates:
+          - metadata:
+              name: postgres-data
+            spec:
+              resources:
+                requests:
+                  storage: 1Gi
+    target:
+      kind: StatefulSet
+      labelSelector: app.kubernetes.io/component=postgres
+
+  # Remove ingress (use hostPort from kind-config instead)
+  - patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: querymind-ingress
+        namespace: querymind
+      spec:
+        rules: []
+    target:
+      kind: Ingress
+      labelSelector: app.kubernetes.io/component=ingress

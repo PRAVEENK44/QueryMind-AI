@@ -1,0 +1,124 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namespace: querymind-dev
+
+namePrefix: dev-
+
+commonLabels:
+  app.kubernetes.io/environment: dev
+
+# Development-specific configuration via patches
+patches:
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: querymind-config
+      data:
+        ALLOWED_ORIGINS: "http://querymind.local,http://localhost:8000,http://localhost:8501"
+        PYTHONUNBUFFERED: "1"
+        ROW_LIMIT: "1000"
+        DATABASE_URL: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@dev-querymind-postgres:5432/querymind"
+        OLLAMA_HOST: "host.docker.internal"
+        ENABLE_CONFIDENCE_SCORING: "true"
+        ENABLE_MULTI_QUERY_VALIDATION: "true"
+        CONFIDENCE_SAMPLE_RATE: "1.0"
+        BACK_TRANSLATION_THRESHOLD: "0.7"
+        LOG_LEVEL: "DEBUG"
+    target:
+      kind: ConfigMap
+      labelSelector: app.kubernetes.io/component=config
+
+  - patch: |-
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: querymind-secrets
+      stringData:
+        POSTGRES_USER: "querymind_ro_user"
+        POSTGRES_PASSWORD: "dev_ro_password_change_me"
+        POSTGRES_RW_USER: "querymind_rw_user"
+        POSTGRES_RW_PASSWORD: "dev_rw_password_change_me"
+        OPENAI_API_KEY: "sk-dev-key"
+        GEMINI_API_KEY: "dev-gemini-key"
+        REDIS_PASSWORD: "dev_redis_password"
+    target:
+      kind: Secret
+      labelSelector: app.kubernetes.io/component=secrets
+
+# Development-specific patches
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: querymind-backend
+        namespace: querymind-dev
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: backend
+                resources:
+                  requests:
+                    cpu: "250m"
+                    memory: "256Mi"
+                  limits:
+                    cpu: "500m"
+                    memory: "512Mi"
+    target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/component=backend
+
+  - patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: querymind-postgres
+        namespace: querymind-dev
+      spec:
+        volumeClaimTemplates:
+          - metadata:
+              name: postgres-data
+            spec:
+              resources:
+                requests:
+                  storage: 1Gi
+    target:
+      kind: StatefulSet
+      labelSelector: app.kubernetes.io/component=postgres
+
+  - patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: querymind-ingress
+        namespace: querymind-dev
+      spec:
+        tls: []  # No TLS for dev
+        rules:
+          - host: querymind.local
+            http:
+              paths:
+                - path: /api
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: dev-querymind-backend
+                      port:
+                        number: 8000
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: dev-querymind-streamlit
+                      port:
+                        number: 8501
+    target:
+      kind: Ingress
+      labelSelector: app.kubernetes.io/component=ingress

@@ -1,7 +1,6 @@
 """Advanced Error Handling - Better error messages and recovery."""
-from typing import Dict, Any, Optional, Tuple
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
 
 
 @dataclass
@@ -9,8 +8,8 @@ class QueryError:
     """Structured query error."""
     error_type: str  # syntax, validation, execution, timeout
     message: str
-    sql片段: Optional[str] = None
-    suggestion: Optional[str] = None
+    sql片段: str | None = None
+    suggestion: str | None = None
     severity: str = "error"  # error, warning
 
 
@@ -24,7 +23,7 @@ class ErrorHandler:
     - Execution errors
     - Timeout errors
     """
-    
+
     # Common SQL errors and their fixes
     ERROR_PATTERNS = [
         {
@@ -53,11 +52,11 @@ class ErrorHandler:
             "suggestion": "Column name is ambiguous. Use table prefix (e.g., orders.amount).",
         },
     ]
-    
+
     def handle_error(
         self,
         error: Exception,
-        query: Optional[str] = None,
+        query: str | None = None,
     ) -> QueryError:
         """
         Handle and categorize an error.
@@ -70,7 +69,7 @@ class ErrorHandler:
             Structured QueryError with suggestion
         """
         error_msg = str(error)
-        
+
         # Try to match known patterns
         for pattern_def in self.ERROR_PATTERNS:
             match = re.search(pattern_def["pattern"], error_msg, re.IGNORECASE)
@@ -80,21 +79,21 @@ class ErrorHandler:
                 for i, group in enumerate(match.groups()):
                     suggestion = suggestion.replace(f"{{{i}}}", group)
                     suggestion = suggestion.replace(f"{{{pattern_def['pattern'].split(':')[1].strip()}}}", group)
-                
+
                 return QueryError(
                     error_type=pattern_def["type"],
                     message=error_msg,
                     sql片段=query,
                     suggestion=suggestion,
                 )
-        
+
         # Default error handling
         return self._handle_generic_error(error_msg, query)
-    
-    def _handle_generic_error(self, error_msg: str, query: Optional[str]) -> QueryError:
+
+    def _handle_generic_error(self, error_msg: str, query: str | None) -> QueryError:
         """Handle generic errors with suggestions."""
         error_lower = error_msg.lower()
-        
+
         # Determine error type
         if "syntax" in error_lower:
             error_type = "syntax"
@@ -106,7 +105,7 @@ class ErrorHandler:
             error_type = "permission"
         else:
             error_type = "execution"
-        
+
         # Generate suggestion based on error type
         suggestions = {
             "syntax": "Check SQL syntax. Common issues: missing quotes, invalid column names, or malformed queries.",
@@ -115,18 +114,18 @@ class ErrorHandler:
             "permission": "Permission denied. Only SELECT queries are allowed.",
             "execution": "Query execution failed. Check the query and try again.",
         }
-        
+
         return QueryError(
             error_type=error_type,
             message=error_msg,
             sql片段=query,
             suggestion=suggestions.get(error_type, "An error occurred. Please check your query."),
         )
-    
+
     def explain_error(self, error: QueryError) -> str:
         """Generate human-readable error explanation."""
         parts = []
-        
+
         # Error type header
         if error.error_type == "syntax":
             parts.append("**SQL Syntax Error**")
@@ -138,43 +137,43 @@ class ErrorHandler:
             parts.append("**Permission Error**")
         else:
             parts.append("**Execution Error**")
-        
+
         # Error message
         parts.append(f"\nError: {error.message}")
-        
+
         # Suggestion
         if error.suggestion:
             parts.append(f"\n💡 **Suggestion:** {error.suggestion}")
-        
+
         # If we have the problematic SQL
         if error.sql:
             parts.append(f"\n📝 **Query:** ```{error.sql}```")
-        
+
         return "\n".join(parts)
-    
-    def suggest_fix(self, error: QueryError, intent: Dict) -> Optional[str]:
+
+    def suggest_fix(self, error: QueryError, intent: dict) -> str | None:
         """Suggest a fix based on error and intent."""
         if error.error_type == "syntax":
             return self._suggest_syntax_fix(error, intent)
         elif error.error_type == "validation":
             return self._suggest_validation_fix(error, intent)
-        
+
         return None
-    
-    def _suggest_syntax_fix(self, error: QueryError, intent: Dict) -> Optional[str]:
+
+    def _suggest_syntax_fix(self, error: QueryError, intent: dict) -> str | None:
         """Suggest fix for syntax errors."""
         error_msg = error.message.lower()
-        
+
         if "no such column" in error_msg:
             # Suggest valid columns
             return "Try using: amount, date, city, user_id, product_id, order_id"
-        
+
         if "no such table" in error_msg:
             return "Use tables: orders, users, products"
-        
+
         return None
-    
-    def _suggest_validation_fix(self, error: QueryError, intent: Dict) -> Optional[str]:
+
+    def _suggest_validation_fix(self, error: QueryError, intent: dict) -> str | None:
         """Suggest fix for validation errors."""
         return "Try simplifying your query or using fewer filters."
 
@@ -183,16 +182,16 @@ class QueryRecovery:
     """
     Attempt to recover from failed queries.
     """
-    
+
     def __init__(self, error_handler: ErrorHandler):
         self.error_handler = error_handler
-    
+
     def try_recovery(
         self,
         error: Exception,
-        intent: Dict,
+        intent: dict,
         original_query: str,
-    ) -> Tuple[Optional[str], Optional[str]]:
+    ) -> tuple[str | None, str | None]:
         """
         Attempt to recover from query failure.
         
@@ -200,19 +199,19 @@ class QueryRecovery:
             Tuple of (recovery_query, recovery_intent) or (None, None)
         """
         query_error = self.error_handler.handle_error(error, original_query)
-        
+
         # Try different recovery strategies
         strategy = self._select_strategy(query_error)
-        
+
         if strategy == "simplify":
             return self._simplify_query(intent)
         elif strategy == "relax_filters":
             return self._relax_filters(intent)
         elif strategy == "reduce_limit":
             return self._reduce_limit(intent)
-        
+
         return None, None
-    
+
     def _select_strategy(self, error: QueryError) -> str:
         """Select recovery strategy based on error."""
         if error.error_type == "syntax":
@@ -222,21 +221,21 @@ class QueryRecovery:
         elif error.error_type == "execution":
             return "relax_filters"
         return "simplify"
-    
-    def _simplify_query(self, intent: Dict) -> Tuple[Optional[str], Optional[Dict]]:
+
+    def _simplify_query(self, intent: dict) -> tuple[str | None, dict | None]:
         """Try to simplify query."""
         simplified = dict(intent)
         simplified["group_by"] = None
         simplified["limit"] = 10
         return None, simplified
-    
-    def _relax_filters(self, intent: Dict) -> Tuple[Optional[str], Optional[Dict]]:
+
+    def _relax_filters(self, intent: dict) -> tuple[str | None, dict | None]:
         """Try removing filters."""
         simplified = dict(intent)
         simplified["filters"] = {}
         return None, simplified
-    
-    def _reduce_limit(self, intent: Dict) -> Tuple[Optional[str], Optional[Dict]]:
+
+    def _reduce_limit(self, intent: dict) -> tuple[str | None, dict | None]:
         """Reduce query limit."""
         simplified = dict(intent)
         simplified["limit"] = min(intent.get("limit", 10), 100)

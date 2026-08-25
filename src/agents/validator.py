@@ -1,5 +1,4 @@
 """Validator Agent - Validates SQL queries for safety and validity."""
-from typing import Dict, List, Optional, Tuple
 import re
 
 
@@ -10,7 +9,7 @@ class ValidationError(Exception):
 
 class QueryValidator:
     """Validates SQL queries for safety and schema compliance."""
-    
+
     # Dangerous SQL keywords that should never be allowed
     DANGEROUS_KEYWORDS = [
         "DROP",
@@ -25,7 +24,7 @@ class QueryValidator:
         "EXEC",
         "EXECUTE",
     ]
-    
+
     # Valid SQL keywords for SELECT queries
     ALLOWED_KEYWORDS = [
         "SELECT",
@@ -57,7 +56,7 @@ class QueryValidator:
         "ELSE",
         "END",
     ]
-    
+
     # Valid aggregation functions
     AGGREGATION_FUNCTIONS = [
         "SUM",
@@ -68,7 +67,7 @@ class QueryValidator:
         "COALESCE",
         "NULLIF",
     ]
-    
+
     # Valid table names - dynamically overridden in validate() from live schema_info
     VALID_TABLES = ["employees", "departments", "salaries", "customers", "campaigns",
                     "interactions", "inventory", "warehouses", "shipments", "suppliers",
@@ -82,8 +81,8 @@ class QueryValidator:
         "order_items": ["item_id", "order_id", "product_id", "quantity", "unit_price", "subtotal"],
         "reviews": ["review_id", "user_id", "product_id", "rating", "review_text", "review_date"],
     }
-    
-    def validate(self, query: str, schema_info: Dict) -> Tuple[bool, Optional[str]]:
+
+    def validate(self, query: str, schema_info: dict) -> tuple[bool, str | None]:
         """
         Validate a SQL query.
         
@@ -95,20 +94,20 @@ class QueryValidator:
             Tuple of (is_valid, error_message)
         """
         query_upper = query.upper()
-        
+
         # Check for dangerous keywords
         for keyword in self.DANGEROUS_KEYWORDS:
             if re.search(rf"\b{keyword}\b", query_upper):
                 return False, f"Query contains forbidden keyword '{keyword}'. Only SELECT queries are allowed."
-        
+
         # Must start with SELECT
         if not query_upper.strip().startswith("SELECT"):
             return False, "Only SELECT queries are allowed."
-        
+
         # Build valid tables dynamically from live schema
         live_tables = set(schema_info.get("tables", {}).keys())
         valid_tables = live_tables if live_tables else {t.lower() for t in self.VALID_TABLES}
-        
+
         # Validate table names (case-insensitive)
         table_pattern = r"FROM\s+(\w+)|JOIN\s+(\w+)"
         table_matches = re.findall(table_pattern, query_upper)
@@ -116,10 +115,10 @@ class QueryValidator:
             for table in match_tuple:
                 if table and table.lower() not in valid_tables:
                     return False, f"Invalid table '{table}'. Valid tables: {', '.join(sorted(valid_tables))}"
-        
+
         return True, None
-    
-    def validate_intent(self, query_intent, schema_info: Dict) -> Tuple[bool, Optional[str]]:
+
+    def validate_intent(self, query_intent, schema_info: dict) -> tuple[bool, str | None]:
         """
         Validate the structured query intent.
         
@@ -131,13 +130,13 @@ class QueryValidator:
             Tuple of (is_valid, error_message)
         """
         term_mappings = schema_info.get("term_mappings", {})
-        
+
         # Validate metric
         if query_intent.metric:
             mapped_metric = term_mappings.get(query_intent.metric.lower(), query_intent.metric)
             if not self._validate_column_exists(mapped_metric):
                 return False, f"Invalid metric '{query_intent.metric}'. Not found in schema."
-        
+
         # Validate group_by
         if query_intent.group_by:
             # Map the term first
@@ -146,16 +145,16 @@ class QueryValidator:
                 # Try direct column name
                 if not self._validate_column_exists(query_intent.group_by):
                     pass  # Will handle in SQL generation
-        
+
         return True, None
-    
+
     def _validate_column_exists(self, column: str) -> bool:
         """Check if column exists in any table."""
         for cols in self.VALID_COLUMNS.values():
             if column in cols:
                 return True
         return False
-    
-    def get_allowed_columns(self) -> Dict[str, List[str]]:
+
+    def get_allowed_columns(self) -> dict[str, list[str]]:
         """Get all allowed columns."""
         return self.VALID_COLUMNS.copy()

@@ -1,6 +1,5 @@
 """Query Suggestions - Suggest follow-up queries to users."""
-from typing import Dict, Any, List, Optional
-import random
+from typing import Any
 
 
 class QuerySuggester:
@@ -12,11 +11,11 @@ class QuerySuggester:
     - Available filters
     - Common patterns
     """
-    
+
     def __init__(self):
         self.suggestion_templates = self._build_templates()
-    
-    def _build_templates(self) -> Dict[str, List[Dict]]:
+
+    def _build_templates(self) -> dict[str, list[dict]]:
         """Build suggestion templates by query type."""
         return {
             "revenue": [
@@ -51,13 +50,13 @@ class QuerySuggester:
                 {"query": "Show top 5 products", "label": "Top products"},
             ],
         }
-    
+
     def suggest(
         self,
         query: str,
-        intent: Dict[str, Any],
+        intent: dict[str, Any],
         result: Any,
-    ) -> List[Dict[str, str]]:
+    ) -> list[dict[str, str]]:
         """
         Generate suggestions based on current query.
         
@@ -71,24 +70,24 @@ class QuerySuggester:
         """
         query_lower = query.lower()
         suggestions = []
-        
+
         # Determine query type
         query_type = self._detect_query_type(query_lower, intent)
-        
+
         # Get templates for this type
         templates = self.suggestion_templates.get(query_type, self.suggestion_templates["default"])
-        
+
         # Add relevant suggestions
         for template in templates[:4]:
             # Skip if too similar to current query
             if self._is_similar(template["query"], query_lower):
                 continue
             suggestions.append(template)
-        
+
         # Add contextual suggestions based on filters
         contextual = self._get_contextual_suggestions(intent)
         suggestions.extend(contextual)
-        
+
         # Return unique suggestions
         seen = set()
         unique = []
@@ -97,10 +96,10 @@ class QuerySuggester:
             if key not in seen:
                 seen.add(key)
                 unique.append(s)
-        
+
         return unique[:5]
-    
-    def _detect_query_type(self, query: str, intent: Dict) -> str:
+
+    def _detect_query_type(self, query: str, intent: dict) -> str:
         """Detect the primary type of query."""
         if any(w in query for w in ["revenue", "sales", "amount", "income"]):
             return "revenue"
@@ -112,54 +111,54 @@ class QuerySuggester:
             return "category"
         if any(w in query for w in ["month", "trend", "time", "year", "date"]):
             return "time"
-        
+
         # Check intent
         metric = intent.get("metric", "")
         if metric in ["amount", "revenue"]:
             return "revenue"
         if metric in ["product_id", "name"]:
             return "products"
-        
+
         return "default"
-    
+
     def _is_similar(self, suggestion: str, query: str) -> bool:
         """Check if suggestion is too similar to current query."""
         # Extract key words
         suggestion_words = set(suggestion.lower().split())
         query_words = set(query.split())
-        
+
         # Check overlap
         overlap = suggestion_words & query_words
-        
+
         # If more than 50% words overlap, skip
         return len(overlap) > len(suggestion_words) * 0.5
-    
-    def _get_contextual_suggestions(self, intent: Dict) -> List[Dict]:
+
+    def _get_contextual_suggestions(self, intent: dict) -> list[dict]:
         """Get contextual suggestions based on current filters."""
         suggestions = []
         filters = intent.get("filters", {})
-        
+
         # If no city filter, suggest adding one
         if not filters.get("city"):
             suggestions.append({
                 "query": "Filter by Bangalore",
                 "label": "Add Bangalore filter",
             })
-        
+
         # If no time filter, suggest adding one
         if not filters.get("time_range"):
             suggestions.append({
                 "query": "Show last 6 months",
                 "label": "Add time filter",
             })
-        
+
         # If no group_by, suggest adding one
         if not intent.get("group_by"):
             suggestions.append({
                 "query": "Group by category",
                 "label": "Add grouping",
             })
-        
+
         return suggestions
 
 
@@ -167,21 +166,21 @@ class SmartSuggester:
     """
     LLM-enhanced suggestion generator for more intelligent suggestions.
     """
-    
+
     def __init__(self, llm_client=None):
         self.llm = llm_client
         self.base_suggester = QuerySuggester()
-    
+
     def suggest(
         self,
         query: str,
-        intent: Dict[str, Any],
+        intent: dict[str, Any],
         result: Any,
-    ) -> List[Dict[str, str]]:
+    ) -> list[dict[str, str]]:
         """Generate suggestions with LLM enhancement."""
         # Always get base suggestions
         suggestions = self.base_suggester.suggest(query, intent, result)
-        
+
         # Try to enhance with LLM if available
         if self.llm and self.llm.api_key:
             try:
@@ -190,15 +189,15 @@ class SmartSuggester:
                     suggestions = llm_suggestions + suggestions[:2]
             except Exception:
                 pass
-        
+
         return suggestions[:5]
-    
+
     def _get_llm_suggestions(
         self,
         query: str,
-        intent: Dict,
+        intent: dict,
         result: Any,
-    ) -> Optional[List[Dict]]:
+    ) -> list[dict] | None:
         """Get LLM-powered suggestions."""
         # This would use the LLM to generate contextual suggestions
         # For now, return None to use base suggestions

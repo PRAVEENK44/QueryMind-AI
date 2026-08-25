@@ -1,27 +1,27 @@
 """Query Generator - Converts structured intent into SQL query."""
-from datetime import datetime, timedelta
-from typing import Optional
 import os
+from datetime import datetime, timedelta
+
 from src.core.intent_parser import QueryIntent
 
 
 class QueryGenerator:
     """Generates SQL queries from structured intent with dynamic join discovery."""
-    
+
     def __init__(self):
         self.aliases = {"orders": "o", "products": "p", "users": "u"}
-        
+
         # Dialect Detection for query adjustments
         db_url = os.getenv("DATABASE_URL", "sqlite")
         self.dialect = "postgresql" if "postgres" in db_url.lower() else "sqlite"
-        
+
     def _format_date(self, column_ref: str) -> str:
         """Dialect-agnostic month extraction"""
         if self.dialect == "postgresql":
             return f"TO_CHAR({column_ref}, 'YYYY-MM')"
         else:
             return f"strftime('%Y-%m', {column_ref})"
-    
+
     def generate(self, intent: QueryIntent, schema_info: dict) -> tuple:
         """Generate SQL query from intent using dynamic schema knowledge.
 
@@ -60,7 +60,7 @@ class QueryGenerator:
     def _get_required_tables(self, intent: QueryIntent, schema_info: dict) -> set:
         """Identify which tables are needed for the query."""
         tables = {"orders"} # Always start with orders
-        
+
         # Determine priority/preference based on intent
         preference = None
         if "product" in str(intent.metric).lower() or (intent.group_by and "product" in str(intent.group_by).lower()):
@@ -72,32 +72,32 @@ class QueryGenerator:
         metric_col = self._map_term(intent.metric, schema_info)
         m_table = self._find_table(metric_col, schema_info, preference)
         if m_table: tables.add(m_table)
-        
+
         # Check group_by
         if intent.group_by and intent.group_by != "date":
             gb_col = self._map_term(intent.group_by, schema_info)
             gb_table = self._find_table(gb_col, schema_info, preference or m_table)
             if gb_table: tables.add(gb_table)
-        
+
         # Check filters
         if intent.filters.category: tables.add("products")
         if intent.filters.city: tables.add("orders")
-        
+
         return tables
 
-    def _find_table(self, column: str, schema_info: dict, preference: Optional[str] = None) -> Optional[str]:
+    def _find_table(self, column: str, schema_info: dict, preference: str | None = None) -> str | None:
         """Find which table a column belongs to, prioritizing preference."""
         all_tables = schema_info.get("tables", {})
-        
+
         # Try preference first
         if preference and preference in all_tables:
             if column in all_tables[preference].get("columns", {}):
                 return preference
-        
+
         # Heuristic: Default 'name' to 'products' if not specified (common in BI)
         if column == "name" and "products" in all_tables:
             return "products"
-        
+
         # Fallback to searching all tables
         for table_name, table_info in all_tables.items():
             if column in table_info.get("columns", {}):
@@ -110,20 +110,20 @@ class QueryGenerator:
         agg = intent.aggregation
         m_table = self._find_table(metric, schema_info) or "orders"
         m_alias = self.aliases.get(m_table, "o")
-        
+
         if intent.group_by and intent.group_by != "date":
             gb_col = self._map_term(intent.group_by, schema_info)
             gb_table = self._find_table(gb_col, schema_info) or "orders"
             gb_alias = self.aliases.get(gb_table, "o")
-            
+
             return f"SELECT {gb_alias}.{gb_col} AS {intent.group_by}, {agg}({m_alias}.{metric}) AS {intent.metric}"
-        
+
         elif intent.group_by == "date":
             date_sql = self._format_date("o.date")
             if agg == "count":
                 return f"SELECT {date_sql} AS month, COUNT(*) AS order_count"
             return f"SELECT {date_sql} AS month, {agg}({m_alias}.{metric}) AS {intent.metric}"
-        
+
         else:
             if agg == "count":
                 return "SELECT COUNT(*) AS total_orders"
@@ -136,11 +136,11 @@ class QueryGenerator:
         """Build JOIN clauses based on relationships."""
         joins = []
         relationships = schema_info.get("relationships", [])
-        
+
         # We start at 'orders'. For any other required table, find relationship
         for table in required_tables:
             if table == "orders": continue
-            
+
             # Find relationship from orders to this table
             for rel in relationships:
                 if (rel["from_table"] == "orders" and rel["to_table"] == table):
@@ -148,7 +148,7 @@ class QueryGenerator:
                     t_alias = self.aliases.get(rel["to_table"])
                     joins.append(f"LEFT JOIN {table} {t_alias} ON {f_alias}.{rel['from_col']} = {t_alias}.{rel['to_col']}")
                     break
-        
+
         return " ".join(joins)
 
     def _build_where(self, intent: QueryIntent, schema_info: dict) -> tuple:
@@ -207,6 +207,6 @@ class QueryGenerator:
         mappings = schema_info.get("term_mappings", {})
         return mappings.get(term.lower(), term)
 
-    def _get_time_range_days(self, time_range: str) -> Optional[int]:
+    def _get_time_range_days(self, time_range: str) -> int | None:
         mapping = {"last_week": 7, "last_month": 30, "3_months": 90, "6_months": 180, "last_year": 365}
         return mapping.get(time_range.lower(), None)

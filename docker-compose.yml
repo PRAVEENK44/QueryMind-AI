@@ -1,22 +1,102 @@
 version: '3.8'
 
 services:
+  # Main API service
   backend:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
     ports:
       - "8000:8000"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY}
+      - OLLAMA_HOST=host.docker.internal
+      - DATABASE_URL=sqlite:///querymind.db
+      - ALLOWED_ORIGINS=http://localhost:8000,http://localhost:3000,http://localhost:8501
+      - PYTHONUNBUFFERED=1
     volumes:
-      - ./querymind.db:/app/querymind.db
-    command: uvicorn api:app --host 0.0.0.0 --port 8000
+      - ./querymind.db:/app/querymind.db:ro
+      - uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    restart: unless-stopped
 
+  # Streamlit UI
   streamlit:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
     ports:
       - "8501:8501"
+    command: ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true", "--server.enableCORS=false", "--server.enableXsrfProtection=true"]
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OLLAMA_HOST=host.docker.internal
+      - DATABASE_URL=sqlite:///querymind.db
     volumes:
-      - ./querymind.db:/app/querymind.db
-    command: streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+      - ./querymind.db:/app/querymind.db:ro
+      - uploads:/app/uploads
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    restart: unless-stopped
+
+  # Redis for caching (optional - for future rate limiting/caching)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    restart: unless-stopped
+
+volumes:
+  uploads:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  default:
+    name: querymind-network

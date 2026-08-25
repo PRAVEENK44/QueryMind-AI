@@ -1,0 +1,17 @@
+# PostgreSQL Dockerfile for QueryMind AI
+FROM postgres:16-alpine
+
+# Copy initialization scripts
+COPY postgres_init.sql /docker-entrypoint-initdb.d/01-init.sql
+
+# Set default environment variables
+ENV POSTGRES_DB=querymind
+ENV POSTGRES_USER=querymind_rw_user
+ENV POSTGRES_PASSWORD=readwrite_password_change_in_prod
+
+# Expose PostgreSQL port
+EXPOSE 5432
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD pg_isready -U querymind_rw_user -d querymind || exit 1

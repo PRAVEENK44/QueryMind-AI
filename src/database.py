@@ -1,8 +1,9 @@
 """Database setup and initialization (Enterprise Corporate Edition)."""
-import sqlite3
 import os
 import random
+import sqlite3
 from datetime import datetime, timedelta
+
 
 def get_db_path():
     return os.path.join(os.path.dirname(__file__), "..", "querymind.db")
@@ -10,12 +11,12 @@ def get_db_path():
 def init_database():
     """Initialize the massive 14-table corporate database with interrelated synthetic data."""
     db_path = get_db_path()
-    
+
     # We will conditionally drop and rebuild to ensure schema is fresh if user requested a bigger DB
     # However to be safe against random restarts, we check for 'departments'
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
+
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='departments'")
     if cursor.fetchone():
         cursor.execute("SELECT COUNT(*) FROM departments")
@@ -115,7 +116,7 @@ def init_database():
 
     first_names = ["James", "Mary", "Robert", "Patricia", "John", "Jennifer", "Michael", "Linda", "William", "Elizabeth", "David", "Barbara", "Richard", "Susan", "Joseph", "Jessica", "Thomas", "Sarah", "Charles", "Karen"]
     last_names = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez", "Hernandez", "Lopez", "Gonzalez", "Wilson", "Anderson", "Thomas", "Taylor", "Moore", "Jackson", "Martin"]
-    
+
     emp_data = []
     sal_data = []
     for i in range(1, 151): # 150 employees
@@ -124,7 +125,7 @@ def init_database():
         emp_data.append((d_id, random.choice(first_names), random.choice(last_names), h_date, "Active"))
         base = random.uniform(60000, 150000)
         sal_data.append((i, base, base * random.uniform(0.05, 0.2), h_date))
-    
+
     cursor.executemany("INSERT INTO employees (dept_id, first_name, last_name, hire_date, status) VALUES (?, ?, ?, ?, ?)", emp_data)
     cursor.executemany("INSERT INTO salaries (emp_id, base_salary, bonus, effective_date) VALUES (?, ?, ?, ?)", sal_data)
 
@@ -175,13 +176,13 @@ def init_database():
 
     # Sales & Invoices (3000 orders)
     sales_reps = [i for i in range(1, 151) if i % 2 == 0] # Assume evens are sales
-    
+
     order_data = []
     item_data = []
     ship_data = []
     inv_docs = []
-    customer_ltv = {i: 0 for i in range(1, 401)}
-    
+    customer_ltv = dict.fromkeys(range(1, 401), 0)
+
     # Pre-fetch MSRP to calculate subtotals
     cursor.execute("SELECT product_id, msrp FROM products")
     price_map = dict(cursor.fetchall())
@@ -192,7 +193,7 @@ def init_database():
         s_rep = random.choice(sales_reps)
         date_obj = datetime.now() - timedelta(days=random.randint(1, 700))
         date = date_obj.strftime("%Y-%m-%d")
-        
+
         status = random.choice(["Completed", "Completed", "Completed", "Processing", "Cancelled"])
         order_total = 0
 
@@ -253,7 +254,7 @@ def get_schema():
             "invoices": {"columns": {"invoice_id": "INTEGER", "order_id": "INTEGER", "issue_date": "TEXT", "due_date": "TEXT", "paid_date": "TEXT", "status": "TEXT", "amount": "REAL"}}
         },
         "term_mappings": {
-            "sales": "total_amount", "revenue": "total_amount", "client": "customer_id", 
+            "sales": "total_amount", "revenue": "total_amount", "client": "customer_id",
             "staff": "emp_id", "stock": "quantity_on_hand", "location": "region"
         },
         "relationships": [

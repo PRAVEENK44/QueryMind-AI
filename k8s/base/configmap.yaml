@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: querymind-config
+  namespace: querymind
+  labels:
+    app.kubernetes.io/name: querymind
+    app.kubernetes.io/component: config
+data:
+  # Application configuration
+  ALLOWED_ORIGINS: "https://querymind.local,https://querymind-staging.example.com,https://querymind.example.com"
+  PYTHONUNBUFFERED: "1"
+  ROW_LIMIT: "1000"
+  DATABASE_URL: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@querymind-postgres:5432/querymind"
+  OLLAMA_HOST: "host.docker.internal"
+  # Feature flags
+  ENABLE_CONFIDENCE_SCORING: "true"
+  ENABLE_MULTI_QUERY_VALIDATION: "true"
+  CONFIDENCE_SAMPLE_RATE: "0.1"
+  BACK_TRANSLATION_THRESHOLD: "0.7"

@@ -1,19 +1,36 @@
 """QueryMind AI - Nexus Backend (Total Isolation Edition v14)."""
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.encoders import jsonable_encoder
-from typing import Optional, Dict, Any, List
+import os
 import time
 import uuid
-import os
-import shutil
+
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile, Depends, Security
+from fastapi.encoders import jsonable_encoder
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
+from fastapi.security import APIKeyHeader
+
 from pydantic import BaseModel
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+
+from src.core.metrics import init_metrics, metrics_recorder
 
 # ================= CORE INITIALIZATION =================
 # We keep top-level imports ONLY for FastAPI/Pydantic/OS to ensure a sub-second network bind.
 app = FastAPI(title="QueryMind AI Nexus API")
+
+# Initialize Prometheus metrics
+init_metrics(version="0.1.0", environment=os.environ.get("ENVIRONMENT", "development"))
+
+# API Key authentication
+API_KEY = os.environ.get("API_KEY", "dev-key-change-in-production")
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+async def verify_api_key(api_key: str = Security(api_key_header)):
+    if not api_key or api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+    return api_key
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Upload directory for user-provided databases
@@ -38,26 +55,26 @@ for folder in ["css", "js"]:
 
 # ================= CORE COMPONENTS (Global Lazy Handlers) =================
 _core = {"initialized": False}
-_custom_cores: Dict[str, Dict] = {}  # Per-session cores for uploaded databases
+_custom_cores: dict[str, dict] = {}  # Per-session cores for uploaded databases
 
 def get_core():
     """Lazily import and initialize everything. This is called ONLY when a user interacts."""
     if not _core.get("initialized"):
         # Local imports ensure the server starts even if libraries are heavy
         print("Nexus Brain: Lazy Wake-up triggered...", flush=True)
-        from src.database import init_database
-        from src.llm.client import get_llm_client, IntentParserLLM
-        from src.core.query_generator import QueryGenerator
-        from src.core.execution_engine import ExecutionEngine
-        from src.core.viz_generator import VizGenerator
-        from src.core.explanation_generator import ExplanationGenerator
         from src.agents.schema_analyzer import SchemaAnalyzer
         from src.agents.validator import QueryValidator
-        
+        from src.core.execution_engine import ExecutionEngine
+        from src.core.explanation_generator import ExplanationGenerator
+        from src.core.query_generator import QueryGenerator
+        from src.core.viz_generator import VizGenerator
+        from src.database import init_database
+        from src.llm.client import IntentParserLLM, get_llm_client
+
         try:
             init_database()
         except: pass
-            
+
         llm_client = get_llm_client()
         _core["parser_llm"] = IntentParserLLM(llm_client)
         _core["query_generator"] = QueryGenerator()
@@ -71,7 +88,7 @@ def get_core():
         print("Nexus Brain: Fully Synchronized.", flush=True)
     return _core
 
-def _extract_schema_from_db(engine) -> Dict:
+def _extract_schema_from_db(engine) -> dict:
     """Auto-extract schema from any SQLite/SQL database using SQLAlchemy inspector."""
     from sqlalchemy import inspect as sa_inspect
     try:
@@ -104,17 +121,17 @@ def _extract_schema_from_db(engine) -> Dict:
         print(f"Schema extraction error: {e}")
         return {"tables": {}, "relationships": [], "term_mappings": {}}
 
-def get_custom_core(session_id: str, db_path: str) -> Dict:
+def get_custom_core(session_id: str, db_path: str) -> dict:
     """Get or create a lightweight per-session core for a user-uploaded database."""
     if session_id in _custom_cores:
         return _custom_cores[session_id]
 
+    from src.agents.validator import QueryValidator
     from src.core.execution_engine import ExecutionEngine
-    from src.llm.client import get_llm_client, IntentParserLLM
+    from src.core.explanation_generator import ExplanationGenerator
     from src.core.query_generator import QueryGenerator
     from src.core.viz_generator import VizGenerator
-    from src.core.explanation_generator import ExplanationGenerator
-    from src.agents.validator import QueryValidator
+    from src.llm.client import IntentParserLLM, get_llm_client
 
     engine = ExecutionEngine(db_path=db_path)
     schema_info = _extract_schema_from_db(engine)
@@ -147,7 +164,8 @@ def force_primitive(v):
     if hasattr(v, "isoformat"): return v.isoformat()
     # Decode Plotly binary-encoded arrays (plotly >= 6.x uses {'dtype': 'f8', 'bdata': '...'})
     if isinstance(v, dict) and "bdata" in v and "dtype" in v:
-        import struct, base64
+        import base64
+        import struct
         DTYPE_MAP = {
             'f4': ('f', 4), 'f8': ('d', 8),
             'i1': ('b', 1), 'i2': ('h', 2), 'i4': ('i', 4), 'i8': ('q', 8),
@@ -179,8 +197,8 @@ async def global_exception_handler(request: Request, exc: Exception):
 # ================= MODELS =================
 class QueryRequest(BaseModel):
     query: str
-    session_id: Optional[str] = None
-    custom_db_id: Optional[str] = None  # Set when user has uploaded a custom DB
+    session_id: str | None = None
+    custom_db_id: str | None = None  # Set when user has uploaded a custom DB
 
 # ================= ROUTES =================
 @app.get("/")
@@ -191,15 +209,17 @@ async def root():
 async def health():
     """Standard health check endpoint for load balancers and monitoring."""
     try:
-        from src.llm.client import get_provider_info
-        provider = get_provider_info()
+        # Create a fresh LLM client to check the actual provider (avoids cached core)
+        from src.llm.client import LLMClient
+        fresh_client = LLMClient()
+        provider_info = fresh_client.get_provider_info()
     except Exception:
-        provider = {"provider": "unknown", "available": False}
+        provider_info = {"provider": "unknown", "available": False}
     return {
         "status": "ok",
-        "llm_provider": provider.get("provider"),
-        "model": provider.get("model"),
-        "llm_available": provider.get("available")
+        "llm_provider": provider_info.get("provider"),
+        "model": provider_info.get("model"),
+        "llm_available": provider_info.get("available")
     }
 
 @app.get("/api/atlas")
@@ -212,10 +232,10 @@ async def get_atlas():
             # Attempt to re-pull schema if empty
             schema = core["schema_analyzer"].get_schema_info()
             core["schema_info"] = schema
-            
+
         if not schema or not schema.get("tables"):
             return JSONResponse(content={"nodes": [], "edges": []})
-            
+
         nodes = [{"id": t, "label": t.upper()} for t in schema.get("tables", {}).keys()]
         edges = [{"from": r["from_table"], "to": r["to_table"]} for r in schema.get("relationships", [])]
         return JSONResponse(content={"nodes": nodes, "edges": edges})
@@ -229,10 +249,10 @@ async def get_dashboard():
     try:
         core = get_core()
         llm_dashboard = core["parser_llm"].generate_dynamic_dashboard(core["schema_info"])
-        
+
         if not llm_dashboard:
             return JSONResponse(status_code=503, content={"success": False, "error": "Nexus Brain is currently offline."})
-            
+
         kpis = []
         for k in llm_dashboard.get("kpis", []):
             try:
@@ -245,8 +265,6 @@ async def get_dashboard():
             except: continue
 
         dashboard_charts = []
-        import json
-        import plotly.utils
         for c in llm_dashboard.get("charts", []):
             try:
                 res = core["execution_engine"].execute(c.get("sql", ""))
@@ -261,8 +279,8 @@ async def get_dashboard():
                 continue
 
         response_data = force_primitive({
-            "success": True, 
-            "kpis": kpis, 
+            "success": True,
+            "kpis": kpis,
             "dashboard_charts": dashboard_charts
         })
         return JSONResponse(content=jsonable_encoder(response_data))
@@ -331,12 +349,14 @@ async def remove_uploaded_database(session_id: str):
     return {"success": True}
 
 @app.post("/api/query")
-async def handle_query(request: QueryRequest):
+async def handle_query(request: QueryRequest, api_key: str = Depends(verify_api_key)):
     """Executes natural language queries — supports both built-in and user-uploaded databases."""
+    start_time = time.time()
     try:
-        from src.core.intent_parser import QueryIntent, QueryFilters
-        import json
-        import plotly.utils
+
+
+        from src.core.confidence import ConfidenceScorer
+        from src.core.intent_parser import QueryFilters, QueryIntent
 
         # Route to the correct core (custom uploaded DB or default)
         if request.custom_db_id:
@@ -351,10 +371,12 @@ async def handle_query(request: QueryRequest):
             core = get_core()
 
         intent_dict = core["parser_llm"].parse(request.query, core["schema_info"])
-        
+
         if not intent_dict:
+            metrics_recorder.record_query_latency("/api/query", time.time() - start_time, False)
+            metrics_recorder.record_error("/api/query", "llm_unavailable")
             return JSONResponse(content={
-                "success": False, 
+                "success": False,
                 "error": "Nexus Brain is offline. Please use simpler queries like 'Total Revenue'.",
                 "data": {"results": []}
             })
@@ -389,24 +411,68 @@ async def handle_query(request: QueryRequest):
             fig = core["viz_generator"].generate_chart(res.data, intent_dict)
             if fig:
                 chart = force_primitive(fig.to_dict())
-                
+
         expl = core["explanation_generator"].generate(intent_dict, sql, res.data)
-        
+
+        # Confidence scoring
+        confidence_scorer = ConfidenceScorer()
+        schema_context = core["parser_llm"]._build_schema_context(core["schema_info"])
+        confidence = confidence_scorer.score(
+            original_query=request.query,
+            sql=sql,
+            schema_context=schema_context,
+            schema_info=core["schema_info"],
+            execution_engine=core["execution_engine"],
+        )
+
         # Pull instrumentation from the LLM client
         usage = getattr(core["parser_llm"].llm, "last_usage", {})
-        
+
+        # Record metrics
+        latency = time.time() - start_time
+        success = res.success
+        metrics_recorder.record_query_latency("/api/query", latency, success)
+
+        if usage:
+            provider = usage.get("provider", "unknown")
+            model = usage.get("model", "unknown")
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+            cost_usd = usage.get("cost_usd", 0.0)
+
+            metrics_recorder.record_tokens(provider, model, prompt_tokens, completion_tokens)
+            metrics_recorder.record_cost(provider, model, cost_usd)
+
+        if not success:
+            metrics_recorder.record_error("/api/query", "execution_failed")
+
+        metrics_recorder.record_confidence(confidence.overall_confidence)
+        metrics_recorder.record_hallucination(confidence.hallucination_flag)
+        if confidence.multi_query_flag is not None:
+            metrics_recorder.record_multi_query_disagreement(confidence.multi_query_flag)
+
         return JSONResponse(content=jsonable_encoder(force_primitive({
-            "success": True, 
-            "explanation": expl, 
-            "visualization": chart, 
+            "success": True,
+            "explanation": expl,
+            "visualization": chart,
             "data": {"results": res.data},
             "metadata": {
                 "generated_sql": sql,
                 "usage": usage,
-                "db_source": "custom" if request.custom_db_id else "built-in"
+                "db_source": "custom" if request.custom_db_id else "built-in",
+                "confidence": {
+                    "overall": confidence.overall_confidence,
+                    "back_translation_score": confidence.back_translation_score,
+                    "back_translated_question": confidence.back_translated_question,
+                    "hallucination_flag": confidence.hallucination_flag,
+                    "multi_query_agreement": confidence.multi_query_agreement,
+                    "multi_query_flag": confidence.multi_query_flag,
+                }
             }
         })))
     except Exception as e:
+        metrics_recorder.record_query_latency("/api/query", time.time() - start_time, False)
+        metrics_recorder.record_error("/api/query", type(e).__name__)
         import traceback
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
@@ -418,14 +484,14 @@ async def get_table_details(name: str):
         core = get_core()
         schema = core["schema_info"]
         table_info = schema.get("tables", {}).get(name)
-        
+
         if not table_info:
             raise HTTPException(status_code=404, detail="Table not found")
-            
+
         # Get sample data using the execution engine (Lite-Core style)
         sql = f"SELECT * FROM {name} LIMIT 5"
         res = core["execution_engine"].execute(sql)
-        
+
         return force_primitive({
             "name": name,
             "description": table_info.get("description", ""),
@@ -475,6 +541,15 @@ async def debug_query(q: str = "show revenue trends"):
     except Exception as e:
         import traceback
         return {"error": str(e), "traceback": traceback.format_exc()}
+
+# Prometheus metrics endpoint
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+from fastapi.responses import Response
+
+@app.get("/metrics", include_in_schema=False)
+async def prometheus_metrics():
+    """Expose Prometheus metrics in text format."""
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 if __name__ == "__main__":
     import uvicorn

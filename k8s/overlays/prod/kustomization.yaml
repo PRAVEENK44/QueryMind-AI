@@ -1,0 +1,125 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namespace: querymind
+
+# Production uses base name (no prefix)
+
+commonLabels:
+  app.kubernetes.io/environment: prod
+
+# Production-specific configuration
+configMapGenerator:
+  - name: querymind-config
+    behavior: merge
+    literals:
+      - ALLOWED_ORIGINS=https://querymind.example.com
+      - PYTHONUNBUFFERED=1
+      - ROW_LIMIT=1000
+      - OLLAMA_HOST=host.docker.internal
+      - ENABLE_CONFIDENCE_SCORING=true
+      - ENABLE_MULTI_QUERY_VALIDATION=true
+      - CONFIDENCE_SAMPLE_RATE=0.1
+      - BACK_TRANSLATION_THRESHOLD=0.7
+      - LOG_LEVEL=WARNING
+
+# Production secrets - use external secret operator or sealed secrets in real deployment
+# This is a placeholder - replace with ExternalSecrets or SealedSecrets
+secretGenerator:
+  - name: querymind-secrets
+    behavior: merge
+    literals:
+      - POSTGRES_USER=querymind_ro_user
+      - POSTGRES_PASSWORD=REPLACE_WITH_EXTERNAL_SECRET
+      - POSTGRES_RW_USER=querymind_rw_user
+      - POSTGRES_RW_PASSWORD=REPLACE_WITH_EXTERNAL_SECRET
+      - OPENAI_API_KEY=REPLACE_WITH_EXTERNAL_SECRET
+      - GEMINI_API_KEY=REPLACE_WITH_EXTERNAL_SECRET
+      - REDIS_PASSWORD=REPLACE_WITH_EXTERNAL_SECRET
+
+# Production-specific patches
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: querymind-backend
+        namespace: querymind
+      spec:
+        replicas: 3
+        template:
+          spec:
+            containers:
+              - name: backend
+                resources:
+                  requests:
+                    cpu: "1000m"
+                    memory: "1Gi"
+                  limits:
+                    cpu: "2000m"
+                    memory: "2Gi"
+                env:
+                  - name: LOG_LEVEL
+                    value: "WARNING"
+    target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/component=backend
+
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: querymind-streamlit
+        namespace: querymind
+      spec:
+        replicas: 2
+        template:
+          spec:
+            containers:
+              - name: streamlit
+                resources:
+                  requests:
+                    cpu: "500m"
+                    memory: "512Mi"
+                  limits:
+                    cpu: "1000m"
+                    memory: "1Gi"
+    target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/component=streamlit
+
+  - patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: querymind-postgres
+        namespace: querymind
+      spec:
+        volumeClaimTemplates:
+          - metadata:
+              name: postgres-data
+            spec:
+              resources:
+                requests:
+                  storage: 20Gi
+    target:
+      kind: StatefulSet
+      labelSelector: app.kubernetes.io/component=postgres
+
+  - patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: querymind-ingress
+        namespace: querymind
+      spec:
+        tls:
+          - hosts:
+              - querymind.example.com
+            secretName: querymind-tls
+    target:
+      kind: Ingress
+      labelSelector: app.kubernetes.io/component=ingress

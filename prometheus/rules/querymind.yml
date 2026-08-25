@@ -1,0 +1,102 @@
+groups:
+  - name: querymind-alerts
+    interval: 30s
+    rules:
+      # High query latency
+      - alert: QueryMindHighLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(querymind_query_latency_seconds_bucket[5m])) by (le)) > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "QueryMind high query latency (p95 > 5s)"
+          description: "95th percentile query latency is {{ $value }}s for more than 2 minutes"
+
+      # High error rate
+      - alert: QueryMindHighErrorRate
+        expr: |
+          sum(rate(querymind_query_errors_total[5m])) / sum(rate(querymind_query_total[5m])) > 0.05
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "QueryMind high error rate (>5%)"
+          description: "Error rate is {{ $value | humanizePercentage }} for more than 1 minute"
+
+      # Eval pass rate dropped
+      - alert: QueryMindEvalPassRateLow
+        expr: |
+          querymind_eval_pass_rate < 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "QueryMind eval pass rate dropped below 50%"
+          description: "Current pass rate is {{ $value }}%"
+
+      # Eval regression detected
+      - alert: QueryMindEvalRegression
+        expr: |
+          querymind_eval_accuracy{run_id=~".+"} < 80
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "QueryMind eval regression detected"
+          description: "Eval accuracy for run {{ $labels.run_id }} is {{ $value }}%"
+
+      # High hallucination rate
+      - alert: QueryMindHighHallucinationRate
+        expr: |
+          rate(querymind_hallucination_detected_total[5m]) / rate(querymind_query_total[5m]) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "QueryMind high hallucination rate (>30%)"
+          description: "Hallucination rate is {{ $value | humanizePercentage }}"
+
+      # Multi-query disagreement
+      - alert: QueryMindMultiQueryDisagreement
+        expr: |
+          rate(querymind_multi_query_disagreement_total[5m]) / rate(querymind_query_total[5m]) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "QueryMind multi-query disagreement rate high (>20%)"
+          description: "Disagreement rate is {{ $value | humanizePercentage }}"
+
+      # High token cost
+      - alert: QueryMindHighTokenCost
+        expr: |
+          rate(querymind_query_cost_usd_total[1h]) > 0.01
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "QueryMind token cost high (>$0.01/hr)"
+          description: "Current cost rate is ${{ $value }}/hr"
+
+      # Low confidence scores
+      - alert: QueryMindLowConfidence
+        expr: |
+          histogram_quantile(0.5, sum(rate(querymind_confidence_score_bucket[5m])) by (le)) < 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "QueryMind median confidence score below 0.5"
+          description: "Median confidence is {{ $value }}"
+
+      # Service down
+      - alert: QueryMindServiceDown
+        expr: |
+          up{job="querymind-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "QueryMind API service is down"
+          description: "QueryMind API has been down for more than 1 minute"

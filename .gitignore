@@ -35,7 +35,6 @@ venv.bak/
 *.db
 *.sqlite
 *.sqlite3
-!querymind.db  # Keep the default built-in DB if you want to ship it, but ignore user uploads
 uploads/
 
 # IDEs and Tools
@@ -44,6 +43,44 @@ uploads/
 *.swp
 *.swo
 .DS_Store
+.claude/
+.qodo/
+
+# Testing & Caches
+.pytest_cache/
+.ruff_cache/
+.coverage/
+htmlcov/
+
+# Logs
+*.log
+eval-output.log
+
+# Eval artifacts (generated)
+eval-results*.json
+eval-report*.md
+eval-final.*
+baseline.json
+run_history.jsonl
+
+# Temporary scripts
+fix_queries.py
+get_standalone_sql.py
+update_queries*.py
+check_conf*.py
+test_*.py
+
+# Secrets & sensitive
+secrets/
+*.key
+*.pem
+*.crt
 
 # Scratch files
 scratch/
+
+# Docker
+.docker/
+
+# OS
+Thumbs.db

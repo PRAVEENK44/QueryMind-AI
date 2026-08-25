@@ -1,10 +1,8 @@
 """QueryMind AI - MCP Gateway.
 Allows QueryMind to be used as a tool-calling server for other AI agents.
 """
-import os
 import json
-import asyncio
-from typing import Optional, Dict, Any, List
+
 from mcp.server.fastmcp import FastMCP
 
 # Initialize FastMCP server
@@ -12,16 +10,16 @@ mcp = FastMCP("QueryMind")
 
 # Import core components (same lazy pattern as api.py)
 def get_core():
-    from src.database import init_database
-    from src.llm.client import get_llm_client, IntentParserLLM
-    from src.core.query_generator import QueryGenerator
-    from src.core.execution_engine import ExecutionEngine
     from src.agents.schema_analyzer import SchemaAnalyzer
-    
+    from src.core.execution_engine import ExecutionEngine
+    from src.core.query_generator import QueryGenerator
+    from src.database import init_database
+    from src.llm.client import IntentParserLLM, get_llm_client
+
     try:
         init_database()
     except: pass
-    
+
     llm_client = get_llm_client()
     return {
         "parser": IntentParserLLM(llm_client),
@@ -43,25 +41,25 @@ async def query_database(natural_language_query: str) -> str:
     """
     core = get_core()
     schema_info = core["analyzer"].get_schema_info()
-    
+
     # Run the pipeline
     intent = core["parser"].parse(natural_language_query, schema_info)
     if not intent:
         return "Failed to parse query intent."
-    
+
     sql = intent.get("sql_query", "")
     res = core["engine"].execute(sql)
-    
+
     if not res.success:
         return f"Query failed: {res.error}\nGenerated SQL: {sql}"
-    
+
     output = {
         "explanation": "Query executed successfully.",
         "sql": sql,
         "row_count": len(res.data),
         "data_sample": res.data[:5]
     }
-    
+
     return json.dumps(output, indent=2)
 
 @mcp.resource("schema://database")
