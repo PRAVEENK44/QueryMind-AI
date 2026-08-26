@@ -51,24 +51,7 @@ uploads/
 .ruff_cache/
 .coverage/
 htmlcov/
-
-# Logs
-*.log
-eval-output.log
-
-# Eval artifacts (generated)
-eval-results*.json
-eval-report*.md
-eval-final.*
-baseline.json
-run_history.jsonl
-
-# Temporary scripts
-fix_queries.py
-get_standalone_sql.py
-update_queries*.py
-check_conf*.py
-test_*.py
+tests/__pycache__/
 
 # Secrets & sensitive
 secrets/
