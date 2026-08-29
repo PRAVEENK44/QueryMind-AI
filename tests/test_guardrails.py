@@ -1,4 +1,5 @@
 """Tests for SQL execution guardrails (AST validation, row limits, read-only enforcement)."""
+
 import pytest
 
 from src.core.execution_engine import ExecutionEngine
@@ -64,6 +65,7 @@ class TestGuardrails:
         """Basic SELECT should work."""
         # First create a table using raw SQLAlchemy to test against
         from sqlalchemy import create_engine, text
+
         test_engine = create_engine("sqlite:///:memory:")
         with test_engine.connect() as conn:
             conn.execute(text("CREATE TABLE test (id INTEGER, name TEXT)"))
@@ -92,6 +94,7 @@ class TestGuardrails:
     def test_postgres_fetch_first(self):
         """PostgreSQL dialect should use FETCH FIRST."""
         import os
+
         os.environ["DATABASE_URL"] = "postgresql://user:pass@host/db"
         try:
             engine = ExecutionEngine(row_limit=100)
@@ -105,9 +108,11 @@ class TestGuardrails:
         """WITH ... SELECT should be allowed."""
         # AST validation allows WITH clauses ending in SELECT
         from src.core.execution_engine import SQLGLOT_AVAILABLE
+
         if SQLGLOT_AVAILABLE:
             import sqlglot
             from sqlglot import exp
+
             parsed = sqlglot.parse("WITH cte AS (SELECT 1) SELECT * FROM cte", dialect="sqlite")
             assert len(parsed) == 1
             # sqlglot parses this as Select with a with_ property, not as With node

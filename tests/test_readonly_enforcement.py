@@ -1,4 +1,5 @@
 """Integration tests for database read-only enforcement."""
+
 import os
 
 import psycopg2
@@ -15,9 +16,7 @@ def get_ro_connection():
     user = os.environ.get("POSTGRES_USER", "querymind_ro_user")
     password = os.environ.get("POSTGRES_PASSWORD", "readonly_password_change_in_prod")
 
-    return psycopg2.connect(
-        host=host, port=port, dbname=db, user=user, password=password
-    )
+    return psycopg2.connect(host=host, port=port, dbname=db, user=user, password=password)
 
 
 def get_rw_connection():
@@ -28,9 +27,7 @@ def get_rw_connection():
     user = os.environ.get("POSTGRES_RW_USER", "querymind_rw_user")
     password = os.environ.get("POSTGRES_RW_PASSWORD", "readwrite_password_change_in_prod")
 
-    return psycopg2.connect(
-        host=host, port=port, dbname=db, user=user, password=password
-    )
+    return psycopg2.connect(host=host, port=port, dbname=db, user=user, password=password)
 
 
 class TestReadOnlyEnforcement:
@@ -85,8 +82,7 @@ class TestReadOnlyEnforcement:
         with ro_conn.cursor() as cur:
             with pytest.raises(InsufficientPrivilege):
                 cur.execute(
-                    "INSERT INTO test_ro_enforcement (name, value) VALUES (%s, %s)",
-                    ("test", 42)
+                    "INSERT INTO test_ro_enforcement (name, value) VALUES (%s, %s)", ("test", 42)
                 )
             ro_conn.rollback()
 
@@ -97,7 +93,7 @@ class TestReadOnlyEnforcement:
         with rw_conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO test_ro_enforcement (name, value) VALUES (%s, %s) RETURNING id",
-                ("original", 100)
+                ("original", 100),
             )
             row_id = cur.fetchone()[0]
             rw_conn.commit()
@@ -107,8 +103,7 @@ class TestReadOnlyEnforcement:
         with ro_conn.cursor() as cur:
             with pytest.raises(InsufficientPrivilege):
                 cur.execute(
-                    "UPDATE test_ro_enforcement SET value = %s WHERE id = %s",
-                    (200, row_id)
+                    "UPDATE test_ro_enforcement SET value = %s WHERE id = %s", (200, row_id)
                 )
             ro_conn.rollback()
 
@@ -118,7 +113,7 @@ class TestReadOnlyEnforcement:
         with rw_conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO test_ro_enforcement (name, value) VALUES (%s, %s) RETURNING id",
-                ("to_delete", 300)
+                ("to_delete", 300),
             )
             row_id = cur.fetchone()[0]
             rw_conn.commit()
@@ -126,10 +121,7 @@ class TestReadOnlyEnforcement:
 
         with ro_conn.cursor() as cur:
             with pytest.raises(InsufficientPrivilege):
-                cur.execute(
-                    "DELETE FROM test_ro_enforcement WHERE id = %s",
-                    (row_id,)
-                )
+                cur.execute("DELETE FROM test_ro_enforcement WHERE id = %s", (row_id,))
             ro_conn.rollback()
 
     def test_create_table_blocked(self, ro_conn):

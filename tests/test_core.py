@@ -1,4 +1,5 @@
 """Unit tests for QueryMind AI core components."""
+
 import pytest
 
 from src.agents.schema_analyzer import SchemaAnalyzer
@@ -71,9 +72,7 @@ class TestQueryGenerator:
 
     def test_generate_with_time_filter(self):
         intent = QueryIntent(
-            metric="amount",
-            aggregation="sum",
-            filters=QueryFilters(time_range="last_month")
+            metric="amount", aggregation="sum", filters=QueryFilters(time_range="last_month")
         )
         sql, params = self.generator.generate(intent, self.schema)
         assert "WHERE" in sql
@@ -127,7 +126,10 @@ class TestExecutionEngine:
         ]:
             result = self.engine.execute(sql)
             assert not result.success, f"Expected {sql} to be blocked"
-            assert "Only SELECT queries are allowed" in result.error or "Forbidden operation" in result.error
+            assert (
+                "Only SELECT queries are allowed" in result.error
+                or "Forbidden operation" in result.error
+            )
 
     def test_dml_blocked_by_ast(self):
         """Test that DML statements are blocked by AST validation."""
@@ -138,18 +140,28 @@ class TestExecutionEngine:
         ]:
             result = self.engine.execute(sql)
             assert not result.success, f"Expected {sql} to be blocked"
-            assert "Only SELECT queries are allowed" in result.error or "Forbidden operation" in result.error
+            assert (
+                "Only SELECT queries are allowed" in result.error
+                or "Forbidden operation" in result.error
+            )
 
     def test_cte_select_allowed(self):
         """Test that CTE with SELECT is allowed."""
-        result = self.engine.execute("WITH dept_count AS (SELECT dept_id, COUNT(*) as cnt FROM employees GROUP BY dept_id) SELECT * FROM dept_count")
+        result = self.engine.execute(
+            "WITH dept_count AS (SELECT dept_id, COUNT(*) as cnt FROM employees GROUP BY dept_id) SELECT * FROM dept_count"
+        )
         assert result.success
 
     def test_cte_dml_blocked(self):
         """Test that CTE with DML is blocked."""
-        result = self.engine.execute("WITH data AS (SELECT 1 as id) INSERT INTO employees SELECT id, 1, 'Test', 'User', '2024-01-01', 'Active' FROM data")
+        result = self.engine.execute(
+            "WITH data AS (SELECT 1 as id) INSERT INTO employees SELECT id, 1, 'Test', 'User', '2024-01-01', 'Active' FROM data"
+        )
         assert not result.success
-        assert "Only SELECT queries are allowed" in result.error or "Forbidden operation" in result.error
+        assert (
+            "Only SELECT queries are allowed" in result.error
+            or "Forbidden operation" in result.error
+        )
 
 
 class TestQueryValidator:
