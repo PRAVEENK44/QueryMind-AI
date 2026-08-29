@@ -214,7 +214,7 @@ class EvalLLMClient:
             }
         )
 
-        return data["message"]["content"]
+        return content
 
     def _nvidia_chat(
         self, messages: list[dict[str, str]], temperature: float, max_tokens: int

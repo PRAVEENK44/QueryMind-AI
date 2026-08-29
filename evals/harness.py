@@ -1051,9 +1051,34 @@ def run_harness(
             flush=True,
         )
 
-        result = run_single_test(
-            eval_client=client, test=test, db_path=db_path, schema_context=schema_context
-        )
+        try:
+            result = run_single_test(
+                eval_client=client, test=test, db_path=db_path, schema_context=schema_context
+            )
+        except Exception as e:
+            print(f"CRASHED: {e}")
+            result = EvalResult(
+                test_id=test.id,
+                category=test.category,
+                query=test.query,
+                passed=False,
+                sql_match=False,
+                row_count_match=False,
+                columns_match=False,
+                generated_sql="",
+                expected_sql=test.expected_sql,
+                actual_row_count=0,
+                expected_min_rows=test.min_rows,
+                expected_max_rows=test.max_rows,
+                actual_columns=[],
+                expected_columns=test.expected_columns,
+                latency_ms=0,
+                tokens_used=0,
+                cost_usd=0.0,
+                provider="none",
+                model="none",
+                error=f"Unhandled exception: {e}",
+            )
         results.append(result)
 
         if result.passed:
