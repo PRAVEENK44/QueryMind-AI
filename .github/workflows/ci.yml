@@ -140,44 +140,47 @@ jobs:
 
       - name: Generate GitHub Actions Summary
         run: |
-          python -c "
-            import json, os
-            with open('eval-results.json') as f:
-                data = json.load(f)
+          python3 - <<'PYEOF'
+          import json
+          import os
 
-            lines = []
-            lines.append('## Eval Harness Summary')
-            lines.append('')
-            lines.append('| Metric | Value |')
-            lines.append('|--------|-------|')
-            lines.append(f'| Total Tests | {data[\"total\"]} |')
-            lines.append(f'| Passed | {data[\"passed\"]} |')
-            lines.append(f'| Failed | {data[\"failed\"]} |')
-            lines.append(f'| Pass Rate | {data[\"pass_rate\"]}% |')
-            lines.append(f'| Avg Latency | {data[\"avg_latency_ms\"]:.0f}ms |')
-            lines.append(f'| Total Tokens | {data[\"total_tokens\"]:,} |')
-            lines.append(f'| Total Cost | \${data[\"total_cost_usd\"]:.6f} |')
-            lines.append(f'| Providers | {data[\"provider_breakdown\"]} |')
+          with open("eval-results.json") as f:
+              data = json.load(f)
 
-            if 'rolling_averages' in data:
-                r = data['rolling_averages']
-                lines.append(f'| Rolling Pass Rate (last {r[\"window_size\"]}) | {r[\"rolling_pass_rate\"]}% |')
+          lines = [
+              "## Eval Harness Summary",
+              "",
+              "| Metric | Value |",
+              "|--------|-------|",
+              f'| Total Tests | {data["total"]} |',
+              f'| Passed | {data["passed"]} |',
+              f'| Failed | {data["failed"]} |',
+              f'| Pass Rate | {data["pass_rate"]}% |',
+              f'| Avg Latency | {data["avg_latency_ms"]:.0f}ms |',
+              f'| Total Tokens | {data["total_tokens"]:,} |',
+              f'| Total Cost | ${data["total_cost_usd"]:.6f} |',
+              f'| Providers | {data["provider_breakdown"]} |',
+          ]
 
-            if 'baseline_comparison' in data and data['baseline_comparison'].get('baseline_available'):
-                bc = data['baseline_comparison']
-                regression = 'REGRESSION' if bc['regression'] else 'OK'
-                lines.append(f'| Baseline Comparison | {regression} (delta {bc[\"pass_rate_delta\"]:+.1f}%) |')
+          if "rolling_averages" in data:
+              r = data["rolling_averages"]
+              lines.append(f'| Rolling Pass Rate (last {r["window_size"]}) | {r["rolling_pass_rate"]}% |')
 
-            confidence_results = [r for r in data['results'] if r.get('confidence_overall') is not None]
-            if confidence_results:
-                avg_conf = sum(r['confidence_overall'] for r in confidence_results) / len(confidence_results)
-                hallucination_rate = sum(1 for r in confidence_results if r.get('confidence_hallucination_flag')) / len(confidence_results)
-                lines.append(f'| Avg Confidence (sampled {len(confidence_results)}) | {avg_conf:.3f} |')
-                lines.append(f'| Hallucination Rate | {hallucination_rate:.1%} |')
+          if "baseline_comparison" in data and data["baseline_comparison"].get("baseline_available"):
+              bc = data["baseline_comparison"]
+              regression = "REGRESSION" if bc["regression"] else "OK"
+              lines.append(f'| Baseline Comparison | {regression} (delta {bc["pass_rate_delta"]:+.1f}%) |')
 
-            with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
-                f.write('\n'.join(lines) + '\n')
-          "
+          confidence_results = [r for r in data["results"] if r.get("confidence_overall") is not None]
+          if confidence_results:
+              avg_conf = sum(r["confidence_overall"] for r in confidence_results) / len(confidence_results)
+              hallucination_rate = sum(1 for r in confidence_results if r.get("confidence_hallucination_flag")) / len(confidence_results)
+              lines.append(f'| Avg Confidence (sampled {len(confidence_results)}) | {avg_conf:.3f} |')
+              lines.append(f'| Hallucination Rate | {hallucination_rate:.1%} |')
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write("\n".join(lines) + "\n")
+          PYEOF
 
       - name: Comment PR with eval summary
         if: github.event_name == 'pull_request'
@@ -198,20 +201,25 @@ jobs:
         env:
           MIN_PASS_RATE: "50"
         run: |
-          python -c "
-            import json, sys, os
-            with open('eval-results.json') as f:
-                data = json.load(f)
-            if data.get('baseline_comparison', {}).get('regression'):
-                print('Baseline regression detected!')
-                sys.exit(1)
-            # Also fail if pass rate drops below threshold
-            min_rate = float(os.environ.get('MIN_PASS_RATE', '50'))
-            if data['pass_rate'] < min_rate:
-                print(f'Pass rate {data[\"pass_rate\"]}% below minimum threshold ({min_rate}%)')
-                sys.exit(1)
-            print('Eval checks passed')
-          "
+          python3 - <<'PYEOF'
+          import json
+          import os
+          import sys
+
+          with open("eval-results.json") as f:
+              data = json.load(f)
+
+          if data.get("baseline_comparison", {}).get("regression"):
+              print("Baseline regression detected!")
+              sys.exit(1)
+
+          min_rate = float(os.environ.get("MIN_PASS_RATE", "50"))
+          if data["pass_rate"] < min_rate:
+              print(f'Pass rate {data["pass_rate"]}% below minimum threshold ({min_rate}%)')
+              sys.exit(1)
+
+          print("Eval checks passed")
+          PYEOF
 
   docker-build:
     name: Docker Build (SQLite)
@@ -276,6 +284,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Install hadolint
+        run: |
+          wget -O /tmp/hadolint https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64
+          chmod +x /tmp/hadolint
+          sudo mv /tmp/hadolint /usr/local/bin/hadolint
+
       - name: Run hadolint on PostgreSQL Dockerfile
         run: hadolint --failure-threshold error Dockerfile.postgres
 
@@ -327,62 +341,67 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
         run: |
-          python -c "
-            import time, statistics
-            from src.core.execution_engine import ExecutionEngine
-            from src.agents.schema_analyzer import SchemaAnalyzer
-            from src.llm.client import get_llm_client, IntentParserLLM
+          python3 - <<'PYEOF'
+          import statistics
+          import time
 
-            engine = ExecutionEngine()
-            analyzer = SchemaAnalyzer()
-            schema_info = analyzer.get_schema_info()
-            llm = get_llm_client()
-            parser = IntentParserLLM(llm)
+          from src.agents.schema_analyzer import SchemaAnalyzer
+          from src.core.execution_engine import ExecutionEngine
+          from src.llm.client import IntentParserLLM, get_llm_client
 
-            queries = [
-                'Total budget across all departments',
-                'Show average salary by department',
-                'Employee count by department',
-                'List campaign ROI percentages',
-                'Total revenue generated by sales rep',
-            ]
+          engine = ExecutionEngine()
+          analyzer = SchemaAnalyzer()
+          schema_info = analyzer.get_schema_info()
+          llm = get_llm_client()
+          parser = IntentParserLLM(llm)
 
-            latencies = []
-            token_counts = []
-            costs = []
+          queries = [
+              "Total budget across all departments",
+              "Show average salary by department",
+              "Employee count by department",
+              "List campaign ROI percentages",
+              "Total revenue generated by sales rep",
+          ]
 
-            for q in queries:
-                start = time.time()
-                intent = parser.parse(q, schema_info)
-                if intent and intent.get('sql_query'):
-                    sql = intent['sql_query']
-                    result = engine.execute(sql)
-                    latency = (time.time() - start) * 1000
-                    latencies.append(latency)
+          latencies = []
+          token_counts = []
+          costs = []
 
-                    usage = getattr(llm, 'last_usage', {})
-                    token_counts.append(usage.get('total_tokens', 0))
-                    costs.append(usage.get('cost_usd', 0.0))
+          for q in queries:
+              start = time.time()
+              intent = parser.parse(q, schema_info)
+              if intent and intent.get("sql_query"):
+                  sql = intent["sql_query"]
+                  result = engine.execute(sql)
+                  latency = (time.time() - start) * 1000
+                  latencies.append(latency)
 
-            print('=== PERFORMANCE BENCHMARK ===')
-            print(f'Queries tested: {len(latencies)}')
-            print(f'P50 latency: {statistics.median(latencies):.0f}ms')
-            print(f'P95 latency: {statistics.quantiles(latencies, n=20)[18] if len(latencies) >= 20 else max(latencies):.0f}ms')
-            print(f'Avg latency: {statistics.mean(latencies):.0f}ms')
-            print(f'Avg tokens: {statistics.mean(token_counts):.0f}')
-            print(f'Avg cost: ${statistics.mean(costs):.6f}')
+                  usage = getattr(llm, "last_usage", {})
+                  token_counts.append(usage.get("total_tokens", 0))
+                  costs.append(usage.get("cost_usd", 0.0))
 
-            # Regression thresholds
-            P95_THRESHOLD = 5000  # ms
-            AVG_COST_THRESHOLD = 0.01  # USD
-            if statistics.quantiles(latencies, n=20)[18] if len(latencies) >= 20 else max(latencies) > P95_THRESHOLD:
-                print(f'P95 latency exceeds threshold ({P95_THRESHOLD}ms)')
-                exit(1)
-            if statistics.mean(costs) > AVG_COST_THRESHOLD:
-                print(f'Avg cost exceeds threshold (${AVG_COST_THRESHOLD})')
-                exit(1)
-            print('Performance benchmarks passed')
-          "
+          p95 = statistics.quantiles(latencies, n=20)[18] if len(latencies) >= 20 else max(latencies)
+
+          print("=== PERFORMANCE BENCHMARK ===")
+          print(f"Queries tested: {len(latencies)}")
+          print(f"P50 latency: {statistics.median(latencies):.0f}ms")
+          print(f"P95 latency: {p95:.0f}ms")
+          print(f"Avg latency: {statistics.mean(latencies):.0f}ms")
+          print(f"Avg tokens: {statistics.mean(token_counts):.0f}")
+          print(f"Avg cost: ${statistics.mean(costs):.6f}")
+
+          P95_THRESHOLD = 5000  # ms
+          AVG_COST_THRESHOLD = 0.01  # USD
+
+          if p95 > P95_THRESHOLD:
+              print(f"P95 latency exceeds threshold ({P95_THRESHOLD}ms)")
+              raise SystemExit(1)
+          if statistics.mean(costs) > AVG_COST_THRESHOLD:
+              print(f"Avg cost exceeds threshold (${AVG_COST_THRESHOLD})")
+              raise SystemExit(1)
+
+          print("Performance benchmarks passed")
+          PYEOF
 
   deploy-preview:
     name: Deploy Preview (Fly.io)
